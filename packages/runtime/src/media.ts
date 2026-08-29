@@ -55,22 +55,33 @@ export function runProcess(
     const terminate = () => {
       aborted = true;
       if (child.exitCode !== null) return;
-      try {
-        // Windows does not implement graceful POSIX signals consistently. A
-        // forced kill prevents FFmpeg from keeping the Node process alive
-        // after a job has already been cancelled.
-        child.kill(process.platform === "win32" ? "SIGKILL" : "SIGTERM");
-      } catch {}
-      if (process.platform !== "win32") {
-        forceKillTimer = setTimeout(() => {
-          if (child.exitCode === null) {
-            try {
-              child.kill("SIGKILL");
-            } catch {}
-          }
-        }, 2000);
-        forceKillTimer.unref();
+      if (process.platform === "win32" && child.pid) {
+        // Package managers commonly expose FFmpeg through a shim process. Kill
+        // the whole tree so the real ffmpeg.exe cannot inherit our stdio pipes
+        // and keep Node alive after the shim exits.
+        const killer = spawn(
+          "taskkill.exe",
+          ["/PID", String(child.pid), "/T", "/F"],
+          { windowsHide: true, shell: false, stdio: "ignore" },
+        );
+        killer.once("error", () => {
+          try {
+            child.kill("SIGKILL");
+          } catch {}
+        });
+        return;
       }
+      try {
+        child.kill("SIGTERM");
+      } catch {}
+      forceKillTimer = setTimeout(() => {
+        if (child.exitCode === null) {
+          try {
+            child.kill("SIGKILL");
+          } catch {}
+        }
+      }, 2000);
+      forceKillTimer.unref();
     };
     const abort = () => terminate();
     signal?.addEventListener("abort", abort, { once: true });

@@ -196,21 +196,24 @@ test("portrait, absent audio, delayed audio, alternate codec track and cancellat
       "aac",
     );
     const controller = new AbortController();
+    const cancellationArgs = [
+      "-nostdin",
+      "-v",
+      "error",
+      "-re",
+      "-f",
+      "lavfi",
+      "-i",
+      "anullsrc",
+      "-f",
+      "null",
+      "-",
+    ];
     const running = runProcess(
-      "ffmpeg",
-      [
-        "-nostdin",
-        "-v",
-        "error",
-        "-re",
-        "-f",
-        "lavfi",
-        "-i",
-        "anullsrc",
-        "-f",
-        "null",
-        "-",
-      ],
+      process.platform === "win32" ? "cmd.exe" : "ffmpeg",
+      process.platform === "win32"
+        ? ["/d", "/s", "/c", "ffmpeg", ...cancellationArgs]
+        : cancellationArgs,
       controller.signal,
     );
     const timer = setTimeout(() => controller.abort(), 200);
