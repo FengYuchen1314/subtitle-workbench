@@ -1,0 +1,197 @@
+{
+  "openai": {
+    "segments": [
+      {
+        "text": "hello",
+        "start": 1,
+        "end": 2
+      }
+    ]
+  },
+  "groq": {
+    "segments": [
+      {
+        "text": "hello",
+        "start": 1,
+        "end": 2
+      }
+    ]
+  },
+  "aliyun": {
+    "transcripts": [
+      {
+        "sentences": [
+          {
+            "text": "hello",
+            "begin_time": 1000,
+            "end_time": 2000
+          }
+        ]
+      }
+    ]
+  },
+  "volcengine": {
+    "result": {
+      "utterances": [
+        {
+          "text": "hello",
+          "start_time": 1000,
+          "end_time": 2000
+        }
+      ]
+    }
+  },
+  "tencent": {
+    "ResultDetail": [
+      {
+        "FinalSentence": "hello",
+        "StartMs": 1000,
+        "EndMs": 2000
+      }
+    ]
+  },
+  "baidu": {
+    "task_result": {
+      "detailed_result": [
+        {
+          "res": [
+            "hello"
+          ],
+          "begin_time": 1000,
+          "end_time": 2000
+        }
+      ]
+    }
+  },
+  "iflytek": {
+    "orderResult": {
+      "lattice": [
+        {
+          "json_1best": "{\"st\":{\"bg\":\"1000\",\"ed\":\"2000\",\"rt\":[{\"ws\":[{\"cw\":[{\"w\":\"hello\"}]}]}]}}"
+        }
+      ]
+    }
+  },
+  "huawei": {
+    "segments": [
+      {
+        "result": {
+          "text": "hello"
+        },
+        "start_time": 1000,
+        "end_time": 2000
+      }
+    ]
+  },
+  "azure": {
+    "phrases": [
+      {
+        "text": "hello",
+        "offsetMilliseconds": 1000,
+        "durationMilliseconds": 1000
+      }
+    ]
+  },
+  "google": {
+    "results": [
+      {
+        "alternatives": [
+          {
+            "words": [
+              {
+                "word": "hello",
+                "startOffset": "1s",
+                "endOffset": "2s"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "aws": {
+    "results": {
+      "items": [
+        {
+          "type": "pronunciation",
+          "start_time": "1",
+          "end_time": "2",
+          "alternatives": [
+            {
+              "content": "hello"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "ibm": {
+    "results": [
+      {
+        "alternatives": [
+          {
+            "timestamps": [
+              [
+                "hello",
+                1,
+                2
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "deepgram": {
+    "results": {
+      "channels": [
+        {
+          "alternatives": [
+            {
+              "words": [
+                {
+                  "word": "hello",
+                  "start": 1,
+                  "end": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "assemblyai": {
+    "words": [
+      {
+        "text": "hello",
+        "start": 1000,
+        "end": 2000
+      }
+    ]
+  },
+  "elevenlabs": {
+    "words": [
+      {
+        "type": "word",
+        "text": "hello",
+        "start": 1,
+        "end": 2
+      }
+    ]
+  },
+  "speechmatics": {
+    "results": [
+      {
+        "type": "word",
+        "start_time": 1,
+        "end_time": 2,
+        "alternatives": [
+          {
+            "content": "hello"
+          }
+        ]
+      }
+    ]
+  }
+}

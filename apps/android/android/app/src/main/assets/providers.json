@@ -1,0 +1,986 @@
+[
+  {
+    "id": "aliyun",
+    "name": "阿里云百炼",
+    "models": [
+      "qwen3-asr-flash-filetrans",
+      "fun-asr",
+      "paraformer-v2"
+    ],
+    "input": "url",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://www.alibabacloud.com/help/en/model-studio/non-realtime-speech-recognition-user-guide",
+    "note": "需音频临时存储；地区必须与密钥一致",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "volcengine",
+    "name": "火山引擎 · 豆包",
+    "models": [
+      "standard",
+      "flash"
+    ],
+    "input": "url",
+    "fields": [
+      {
+        "key": "appId",
+        "label": "App ID"
+      },
+      {
+        "key": "apiKey",
+        "label": "Access Token",
+        "secret": true
+      },
+      {
+        "key": "resourceId",
+        "label": "Resource ID",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://www.volcengine.com/docs/6561/1354868",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "tencent",
+    "name": "腾讯云",
+    "models": [
+      "16k_zh_large",
+      "16k_zh_en",
+      "16k_en",
+      "16k_ja"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "accessKey",
+        "label": "Access Key / Secret ID",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Secret Key",
+        "secret": true
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://cloud.tencent.com/document/api/1093/37823",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 110
+  },
+  {
+    "id": "baidu",
+    "name": "百度智能云",
+    "models": [
+      "80006",
+      "1737",
+      "8953"
+    ],
+    "input": "url",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Secret Key",
+        "secret": true
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://ai.baidu.com/ai-doc/SPEECH/Klbxern8v",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "iflytek",
+    "name": "讯飞",
+    "models": [
+      "llm",
+      "standard"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "appId",
+        "label": "App ID"
+      },
+      {
+        "key": "accessKey",
+        "label": "Access Key ID / API Key",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Access Key Secret / Secret Key",
+        "secret": true
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://www.xfyun.cn/doc/spark/asr_llm/Ifasr_llm.html",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "huawei",
+    "name": "华为云 SIS",
+    "models": [
+      "chinese_16k_general"
+    ],
+    "input": "url",
+    "fields": [
+      {
+        "key": "token",
+        "label": "IAM X-Auth-Token",
+        "secret": true
+      },
+      {
+        "key": "projectId",
+        "label": "Project ID"
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://support.huaweicloud.com/api-sis/sis_03_0092.html",
+    "note": "使用有有效期的 IAM Token；过期后需要更新",
+    "category": "asr",
+    "timestamps": "segment",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "models": [
+      "whisper-1",
+      "gpt-4o-transcribe-diarize"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://developers.openai.com/api/docs/guides/speech-to-text",
+    "note": "字幕模式只提供原生返回时间戳的模型",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "azure",
+    "name": "Microsoft Azure",
+    "models": [
+      "fast",
+      "batch"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-speech-to-text",
+    "note": "Batch 模式需要音频临时存储",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "google",
+    "name": "Google Cloud",
+    "models": [
+      "chirp_3",
+      "long"
+    ],
+    "input": "gcs",
+    "fields": [
+      {
+        "key": "serviceAccount",
+        "label": "Service Account JSON",
+        "secret": true
+      },
+      {
+        "key": "projectId",
+        "label": "Project ID"
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://docs.cloud.google.com/speech-to-text/docs/models/chirp-3",
+    "note": "需同项目 GCS 存储配置",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "aws",
+    "name": "Amazon Transcribe",
+    "models": [
+      "standard"
+    ],
+    "input": "s3",
+    "fields": [
+      {
+        "key": "accessKey",
+        "label": "Access Key / Secret ID",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Secret Key",
+        "secret": true
+      },
+      {
+        "key": "sessionToken",
+        "label": "Session Token",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://docs.aws.amazon.com/transcribe/latest/dg/subtitles.html",
+    "note": "需同区域 S3 存储",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "ibm",
+    "name": "IBM Watson",
+    "models": [
+      "en-US_Multimedia",
+      "zh-CN_Telephony"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": false,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://cloud.ibm.com/docs/speech-to-text?topic=speech-to-text-async",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "deepgram",
+    "name": "Deepgram",
+    "models": [
+      "nova-3",
+      "nova-2"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "assemblyai",
+    "name": "AssemblyAI",
+    "models": [
+      "universal-3-pro",
+      "universal-2"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://www.assemblyai.com/docs/pre-recorded-audio/api-reference/transcripts/submit",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "elevenlabs",
+    "name": "ElevenLabs",
+    "models": [
+      "scribe_v2"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://elevenlabs.io/docs/api-reference/speech-to-text/convert",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "models": [
+      "whisper-large-v3-turbo",
+      "whisper-large-v3"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://console.groq.com/docs/speech-to-text",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "speechmatics",
+    "name": "Speechmatics",
+    "models": [
+      "enhanced",
+      "standard"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://docs.speechmatics.com/speech-to-text/batch/quickstart",
+    "note": "",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "custom-openai",
+    "name": "自定义 · OpenAI ASR",
+    "models": [
+      "whisper-1"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": false,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "https://developers.openai.com/api/docs/guides/speech-to-text",
+    "note": "必须返回真实 segments 或 words，纯文本返回会报错",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "custom-json",
+    "name": "自定义 · 字幕 JSON",
+    "models": [
+      "default"
+    ],
+    "input": "file",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": false,
+        "placeholder": "HTTPS API base URL"
+      },
+      {
+        "key": "languageCode",
+        "label": "API 语言代码覆盖（可选）",
+        "optional": true,
+        "placeholder": "留空按原声语言转换；特定方言/语言包可手动填写"
+      }
+    ],
+    "docs": "",
+    "note": "POST multipart file；返回 language 和 cues（毫秒时间戳）",
+    "category": "asr",
+    "timestamps": "word",
+    "maxChunkSeconds": 300
+  },
+  {
+    "id": "llm-openai",
+    "name": "OpenAI / 兼容翻译",
+    "models": [
+      "gpt-4.1-mini"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "llm-deepseek",
+    "name": "DeepSeek",
+    "models": [
+      "deepseek-chat"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "llm-qwen",
+    "name": "通义千问",
+    "models": [
+      "qwen-plus"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "llm-doubao",
+    "name": "豆包 / 火山方舟",
+    "models": [
+      "填写已开通模型 ID"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "llm-gemini",
+    "name": "Google Gemini",
+    "models": [
+      "gemini-2.5-flash"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "llm-claude",
+    "name": "Anthropic Claude",
+    "models": [
+      "claude-sonnet-4-6"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "deepl",
+    "name": "DeepL",
+    "models": [
+      "default"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "translate-google",
+    "name": "Google Cloud Translation",
+    "models": [
+      "nmt"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "serviceAccount",
+        "label": "Service Account JSON",
+        "secret": true
+      },
+      {
+        "key": "projectId",
+        "label": "Project ID"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "translate-azure",
+    "name": "Azure Translator",
+    "models": [
+      "default"
+    ],
+    "category": "translation",
+    "fields": [
+      {
+        "key": "apiKey",
+        "label": "API Key",
+        "secret": true
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "storage-s3",
+    "name": "S3 / S3 兼容",
+    "models": [
+      "default"
+    ],
+    "category": "storage",
+    "fields": [
+      {
+        "key": "accessKey",
+        "label": "Access Key / Secret ID",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Secret Key",
+        "secret": true
+      },
+      {
+        "key": "sessionToken",
+        "label": "Session Token",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "key": "bucket",
+        "label": "Bucket"
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": false,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "storage-oss",
+    "name": "阿里云 OSS",
+    "models": [
+      "default"
+    ],
+    "category": "storage",
+    "fields": [
+      {
+        "key": "accessKey",
+        "label": "Access Key / Secret ID",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Secret Key",
+        "secret": true
+      },
+      {
+        "key": "sessionToken",
+        "label": "Session Token",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "key": "bucket",
+        "label": "Bucket"
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "storage-cos",
+    "name": "腾讯云 COS",
+    "models": [
+      "default"
+    ],
+    "category": "storage",
+    "fields": [
+      {
+        "key": "accessKey",
+        "label": "Access Key / Secret ID",
+        "secret": true
+      },
+      {
+        "key": "secretKey",
+        "label": "Secret Key",
+        "secret": true
+      },
+      {
+        "key": "sessionToken",
+        "label": "Session Token",
+        "secret": true,
+        "optional": true
+      },
+      {
+        "key": "bucket",
+        "label": "Bucket"
+      },
+      {
+        "key": "region",
+        "label": "区域",
+        "optional": true
+      },
+      {
+        "key": "endpoint",
+        "label": "服务地址",
+        "optional": true,
+        "placeholder": "HTTPS API base URL"
+      }
+    ],
+    "docs": ""
+  },
+  {
+    "id": "storage-gcs",
+    "name": "Google Cloud Storage",
+    "models": [
+      "default"
+    ],
+    "category": "storage",
+    "fields": [
+      {
+        "key": "serviceAccount",
+        "label": "Service Account JSON",
+        "secret": true
+      },
+      {
+        "key": "bucket",
+        "label": "Bucket"
+      }
+    ],
+    "docs": ""
+  }
+]

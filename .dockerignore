@@ -1,0 +1,15 @@
+.git
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.gradle
+data
+release
+assets/media-bin
+.env
+.env.*
+!.env.example
+*.log
+apps/android/android

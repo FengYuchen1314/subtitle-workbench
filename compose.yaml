@@ -1,0 +1,43 @@
+services:
+  web:
+    build: .
+    image: subtitle-workbench:local
+    restart: unless-stopped
+    ports:
+      - "${SUBTITLE_BIND_ADDRESS:-127.0.0.1}:3000:3000"
+    environment:
+      SUBTITLE_MASTER_KEY: ${SUBTITLE_MASTER_KEY:?Set a 64-character hex master key in .env}
+      SUBTITLE_SETUP_TOKEN: ${SUBTITLE_SETUP_TOKEN:?Set a random setup token in .env}
+      SUBTITLE_PUBLIC_ORIGIN: ${SUBTITLE_PUBLIC_ORIGIN:-http://localhost:3000}
+      SUBTITLE_COOKIE_SECURE: ${SUBTITLE_COOKIE_SECURE:-false}
+      SUBTITLE_MEDIA_ROOT: /media
+    volumes:
+      - subtitle-data:/data
+      - ${SUBTITLE_MEDIA_DIR:-./media}:/media:ro
+    init: true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/v1/auth/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  worker:
+    image: subtitle-workbench:local
+    build: .
+    command: ["node", "worker/worker.cjs"]
+    restart: unless-stopped
+    environment:
+      SUBTITLE_MASTER_KEY: ${SUBTITLE_MASTER_KEY:?Set master key}
+      SUBTITLE_MEDIA_ROOT: /media
+    volumes:
+      - subtitle-data:/data
+      - ${SUBTITLE_MEDIA_DIR:-./media}:/media:ro
+    init: true
+    stop_grace_period: 30s
+volumes:
+  subtitle-data:

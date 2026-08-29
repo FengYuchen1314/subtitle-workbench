@@ -1,0 +1,56 @@
+{
+  "name": "subtitle-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env node_modules/next/dist/bin/next dev apps/web --hostname 127.0.0.1",
+    "worker": "node --env-file-if-exists=.env --import tsx packages/runtime/src/worker-cli.ts",
+    "start": "node --env-file-if-exists=.env node_modules/next/dist/bin/next start apps/web --hostname 0.0.0.0",
+    "build": "next build apps/web",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:media": "tsx --test tests/media.integration.ts",
+    "test:web": "tsx --test tests/web.integration.ts",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop": "npm run desktop:build && electron apps/desktop/dist/main.cjs",
+    "desktop:package": "npm run desktop:build && node scripts/stage-media.mjs && electron-builder --config apps/desktop/electron-builder.yml",
+    "android:web": "vite build --config apps/android/vite.config.ts",
+    "android:sync": "npm run android:web && tsx scripts/android-assets.ts && cd apps/android && cap sync android",
+    "init:env": "node scripts/init-env.mjs",
+    "build:worker": "node scripts/build-worker.mjs",
+    "test:long": "tsx --test tests/long-media.integration.ts",
+    "setup": "node --env-file-if-exists=.env --import tsx scripts/setup.ts"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/core": "8.5.0",
+    "lucide-react": "^0.577.0",
+    "next": "16.3.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "undici": "^7.29.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "44.0.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}

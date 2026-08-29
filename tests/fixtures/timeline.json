@@ -1,0 +1,12 @@
+{
+  "durationMs": 6000,
+  "parts": [
+    { "offsetMs": 0, "text": "hello", "startMs": 0, "endMs": 2000 },
+    { "offsetMs": 1800, "text": "hello", "startMs": 0, "endMs": 700 },
+    { "offsetMs": 5000, "text": "world", "startMs": 0, "endMs": 2000 }
+  ],
+  "expected": [
+    { "text": "hello", "startMs": 0, "endMs": 2500 },
+    { "text": "world", "startMs": 5000, "endMs": 6000 }
+  ]
+}
