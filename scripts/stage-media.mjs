@@ -7,12 +7,50 @@ import {
   existsSync,
   chmodSync,
   realpathSync,
+  readdirSync,
 } from "node:fs";
 import { resolve, join, basename, dirname } from "node:path";
 const root = resolve("assets/media-bin");
 mkdirSync(root, { recursive: true });
 const copied = new Map();
 const destinations = new Map();
+
+function findFile(directory, fileName) {
+  if (!existsSync(directory)) return undefined;
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      const nested = findFile(path, fileName);
+      if (nested) return nested;
+    } else if (entry.isFile() && entry.name.toLowerCase() === fileName) {
+      return path;
+    }
+  }
+  return undefined;
+}
+
+function resolveWindowsBinary(source, name) {
+  if (process.platform !== "win32") return source;
+  const normalizedSourceDir = dirname(source).toLowerCase();
+  const inferredChocolateyRoot = normalizedSourceDir.endsWith(
+    "\\chocolatey\\bin",
+  )
+    ? dirname(dirname(source))
+    : undefined;
+  const chocolateyRoot = process.env.ChocolateyInstall || inferredChocolateyRoot;
+  if (
+    !chocolateyRoot ||
+    normalizedSourceDir !== join(chocolateyRoot, "bin").toLowerCase()
+  )
+    return source;
+  const binary = findFile(
+    join(chocolateyRoot, "lib", "ffmpeg", "tools"),
+    `${name}.exe`,
+  );
+  if (!binary)
+    throw new Error(`Chocolatey 的 ${name} shim 未找到对应的真实二进制文件`);
+  return binary;
+}
 
 function dylibReferences(source) {
   return execFileSync("otool", ["-L", source], { encoding: "utf8" })
@@ -127,7 +165,7 @@ for (const name of ["ffmpeg", "ffprobe"]) {
         .split(/\r?\n/)[0];
   if (!existsSync(source))
     throw new Error(`未找到 ${name}，请安装 FFmpeg 或指定 MEDIA_BIN_DIR`);
-  const resolvedSource = realpathSync(source);
+  const resolvedSource = realpathSync(resolveWindowsBinary(source, name));
   const executableDir = dirname(resolvedSource);
   bundle(
     resolvedSource,
