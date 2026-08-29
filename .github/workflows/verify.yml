@@ -36,7 +36,12 @@ jobs:
       - if: runner.os == 'Windows'
         run: choco install ffmpeg -y --no-progress
       - if: runner.os == 'macOS'
-        run: brew install ffmpeg
+        run: brew install ffmpeg-full
+      - if: runner.os == 'macOS'
+        name: Select libass-enabled FFmpeg
+        run: |
+          echo "MEDIA_BIN_DIR=$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_ENV"
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run test:media
       - run: npm run desktop:package
