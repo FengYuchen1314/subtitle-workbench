@@ -44,7 +44,23 @@ jobs:
           echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run test:media
-      - run: npm run desktop:package -- --publish never
+      - if: runner.os == 'Windows'
+        run: npm run desktop:package -- --publish never
+      - if: runner.os == 'macOS'
+        name: Build DMG with one transient retry
+        run: |
+          for attempt in 1 2; do
+            if npm run desktop:package -- --publish never; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 2 ]; then
+              exit 1
+            fi
+            mount | awk '/\/Volumes\/Subtitle Workbench/ { print $1 }' | while read -r device; do
+              hdiutil detach -force "$device" || true
+            done
+            sleep 5
+          done
         env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
       - uses: actions/upload-artifact@v4
         with:
