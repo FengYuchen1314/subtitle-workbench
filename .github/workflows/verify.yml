@@ -44,7 +44,7 @@ jobs:
           echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run test:media
-      - run: npm run desktop:package
+      - run: npm run desktop:package -- --publish never
         env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
       - uses: actions/upload-artifact@v4
         with:
