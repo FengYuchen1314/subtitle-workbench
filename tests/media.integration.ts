@@ -199,6 +199,7 @@ test("portrait, absent audio, delayed audio, alternate codec track and cancellat
     const running = runProcess(
       "ffmpeg",
       [
+        "-nostdin",
         "-v",
         "error",
         "-re",

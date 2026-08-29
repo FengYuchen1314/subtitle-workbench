@@ -28,16 +28,59 @@ export function runProcess(
       windowsHide: true,
       shell: false,
       cwd,
-      signal,
     });
     let result = "",
       error = "",
       pending = "";
+    let finished = false;
+    let aborted = signal?.aborted ?? false;
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      signal?.removeEventListener("abort", abort);
+    };
+    const succeed = () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      resolvePromise(result);
+    };
+    const fail = (reason: Error) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      reject(reason);
+    };
+    const terminate = () => {
+      aborted = true;
+      if (child.exitCode !== null) return;
+      try {
+        // Windows does not implement graceful POSIX signals consistently. A
+        // forced kill prevents FFmpeg from keeping the Node process alive
+        // after a job has already been cancelled.
+        child.kill(process.platform === "win32" ? "SIGKILL" : "SIGTERM");
+      } catch {}
+      if (process.platform !== "win32") {
+        forceKillTimer = setTimeout(() => {
+          if (child.exitCode === null) {
+            try {
+              child.kill("SIGKILL");
+            } catch {}
+          }
+        }, 2000);
+        forceKillTimer.unref();
+      }
+    };
+    const abort = () => terminate();
+    signal?.addEventListener("abort", abort, { once: true });
+    if (aborted) terminate();
+
     child.stdout.on("data", (data) => {
       result += data.toString();
       if (result.length > 4 * 1024 * 1024) {
-        child.kill();
-        reject(new Error("媒体工具输出超限"));
+        terminate();
+        fail(new Error("媒体工具输出超限"));
       }
     });
     child.stderr.on("data", (data) => {
@@ -48,18 +91,18 @@ export function runProcess(
       pending = lines.pop() || "";
       for (const line of lines) onLine?.(line);
     });
-    child.on("error", (e) =>
-      reject(
-        e.name === "AbortError"
+    child.on("error", () =>
+      fail(
+        aborted
           ? new Error("任务已取消")
           : new Error(`无法启动 ${command}，请安装媒体工具或配置路径`),
       ),
     );
-    child.on("close", (code) =>
-      code === 0
-        ? resolvePromise(result)
-        : reject(new Error(`媒体处理失败（${code}）：${error.slice(-600)}`)),
-    );
+    child.on("close", (code) => {
+      if (aborted) fail(new Error("任务已取消"));
+      else if (code === 0) succeed();
+      else fail(new Error(`媒体处理失败（${code}）：${error.slice(-600)}`));
+    });
   });
 }
 export class FfmpegEngine {

@@ -44,6 +44,7 @@ jobs:
           echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run test:media
+        timeout-minutes: 10
       - if: runner.os == 'Windows'
         run: npm run desktop:package -- --publish never
       - if: runner.os == 'macOS'
