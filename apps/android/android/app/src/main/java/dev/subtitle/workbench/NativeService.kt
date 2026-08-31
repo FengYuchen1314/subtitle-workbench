@@ -60,6 +60,9 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 val p = a.copy()
                 val id = p.s("id").ifEmpty { uuid() }
                 val old = if (p.s("id").isEmpty()) null else store.get("profile", id)
+                require(old == null || old.s("provider") == p.s("provider")) {
+                    "不能修改已有配置的供应商，请新建配置"
+                }
                 val secrets = old?.o("secrets")?.copy() ?: obj()
                 p.o("secrets").keys().forEach { k ->
                     if (p.o("secrets").s(k).isNotEmpty()) secrets.put(k, p.o("secrets").s(k))
@@ -113,6 +116,11 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 }
                 if (kind != "transcribe")
                     require(project.o("document").a("cues").length() > 0) { "请先生成字幕" }
+                if (kind == "transcribe")
+                    require(project.o("media").a("audioTracks").length() > 0) { "视频没有音轨；可导入字幕直接烧录" }
+                if (kind == "render") require(project.has("media")) { "请先导入视频" }
+                if (kind == "translate")
+                    require(params.s("targetLanguage").isNotBlank()) { "请选择目标语言" }
                 if (kind == "render")
                     Subtitles.export(
                         project.o("document"),
@@ -147,6 +155,9 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 return j
             }
             "job.cancel" -> {
+                require(store.get("job", a.s("id")).s("status") in listOf("queued", "running")) {
+                    "任务已结束，不能取消"
+                }
                 val result =
                     store.update("job", a.s("id")) {
                         it.put("status", "cancelled").put("phase", "已取消")
@@ -156,7 +167,9 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
             }
             "job.retry" -> {
                 val j = store.get("job", a.s("id"))
-                require(j.s("status") !in listOf("running", "queued")) { "任务正在执行" }
+                require(j.s("status") in listOf("failed", "cancelled", "attention")) {
+                    "仅失败、取消或待确认任务可以重试"
+                }
                 if (a.optBoolean("confirmPaidRetry")) {
                     store.update("checkpoint", j.s("id")) { cp ->
                         cp.a("chunks")
@@ -204,9 +217,15 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
         val p = store.get("project", a.s("id"))
         var doc = p.o("document")
         val expectedRevision = doc.optInt("revision")
+        require(!a.has("expectedRevision") || a.optInt("expectedRevision") == expectedRevision) {
+            "字幕已更新，请刷新后重试"
+        }
         val list = doc.a("cues").objects().toMutableList()
         when (method) {
-            "project.rename" -> p.put("name", a.s("name").take(160))
+            "project.rename" -> {
+                require(a.s("name").isNotBlank()) { "项目名称不能为空" }
+                p.put("name", a.s("name").trim().take(160))
+            }
             "style.save" -> {
                 val style = a.o("style")
                 require(style.optInt("fontSize") in 12..160 && style.optInt("margin") in 0..500)
@@ -240,14 +259,20 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 val c = list.firstOrNull { it.s("id") == a.s("cueId") } ?: error("字幕不存在")
                 if (a.has("translation")) {
                     val translations = c.o("translations")
-                    translations.put(
-                        a.s("language"),
-                        obj(
-                            "text" to a.s("translation"),
-                            "sourceRevision" to c.optInt("revision"),
-                            "provider" to "manual",
-                        ),
-                    )
+                    require(a.s("language").isNotBlank() && a.s("language").length <= 40) {
+                        "请选择译文语言"
+                    }
+                    require(a.s("translation").length <= 20000) { "译文过长" }
+                    if (a.s("translation").isBlank()) translations.remove(a.s("language"))
+                    else
+                        translations.put(
+                            a.s("language"),
+                            obj(
+                                "text" to a.s("translation"),
+                                "sourceRevision" to c.optInt("revision"),
+                                "provider" to "manual",
+                            ),
+                        )
                     c.put("translations", translations)
                 } else {
                     val patch = a.o("patch")
@@ -257,7 +282,10 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                     }
                     listOf("startMs", "endMs")
                         .filter { patch.has(it) }
-                        .forEach { c.put(it, patch.getLong(it)) }
+                        .forEach {
+                            if (c.getLong(it) != patch.getLong(it)) c.remove("words")
+                            c.put(it, patch.getLong(it))
+                        }
                 }
                 doc.put("revision", doc.optInt("revision") + 1)
             }
@@ -268,13 +296,18 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 val at = a.getLong("at")
                 require(at > c.getLong("startMs") && at < c.getLong("endMs"))
                 val text = c.s("text")
+                val chars = text.codePoints().toArray()
+                require(chars.size >= 2) { "字幕文字不足以拆分" }
                 val cut =
                     ((at - c.getLong("startMs")).toDouble() /
-                            (c.getLong("endMs") - c.getLong("startMs")) * text.length)
-                        .toInt()
-                        .coerceIn(1, (text.length - 1).coerceAtLeast(1))
-                list[index] = cue(text.take(cut), c.getLong("startMs"), at)
-                list.add(index + 1, cue(text.drop(cut), at, c.getLong("endMs")))
+                            (c.getLong("endMs") - c.getLong("startMs")) * chars.size)
+                        .let { kotlin.math.floor(it + 0.5).toInt() }
+                        .coerceIn(1, chars.size - 1)
+                list[index] = cue(String(chars, 0, cut), c.getLong("startMs"), at)
+                list.add(
+                    index + 1,
+                    cue(String(chars, cut, chars.size - cut), at, c.getLong("endMs")),
+                )
                 doc.put("cues", arr(list)).put("revision", doc.optInt("revision") + 1)
             }
             "subtitle.merge" -> {
@@ -292,13 +325,18 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
             }
             "subtitle.replace" -> {
                 require(a.s("search").isNotEmpty())
+                var changed = false
                 list
                     .filter { it.s("text").contains(a.s("search")) }
                     .forEach {
-                        it.put("text", it.s("text").replace(a.s("search"), a.s("replacement")))
-                            .put("revision", it.optInt("revision") + 1)
+                        val text = it.s("text").replace(a.s("search"), a.s("replacement"))
+                        if (text != it.s("text")) {
+                            it.put("text", text).put("revision", it.optInt("revision") + 1)
+                            it.remove("words")
+                            changed = true
+                        }
                     }
-                doc.put("revision", doc.optInt("revision") + 1)
+                if (changed) doc.put("revision", doc.optInt("revision") + 1)
             }
         }
         Subtitles.validate(doc)

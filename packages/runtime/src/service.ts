@@ -20,6 +20,17 @@ import { FfmpegEngine } from "./media";
 import { availableFonts } from "./fonts";
 export class Service {
   constructor(readonly store: Store) {}
+  private atomic<T>(action: () => T): T {
+    this.store.db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = action();
+      this.store.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.store.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   async importVideo(path: string, name = basename(path)) {
     const info = await new FfmpegEngine().probe(path);
     const p = this.store.createProject(name, path);
@@ -30,6 +41,15 @@ export class Service {
   }
   async call(method: string, args: Record<string, any> = {}) {
     const s = this.store;
+    const editableProject = () => {
+      const p = s.project(args.id);
+      if (
+        args.expectedRevision !== undefined &&
+        args.expectedRevision !== p.document.revision
+      )
+        throw new Error("字幕已被其他窗口修改，请刷新后重试");
+      return { p, revision: p.document.revision };
+    };
     switch (method) {
       case "media.fonts":
         return availableFonts();
@@ -45,6 +65,8 @@ export class Service {
         const parsed = profileSchema.parse(args),
           old = parsed.id ? s.profile(parsed.id) : undefined;
         const definition = providerDefinition(parsed.provider);
+        if (old && old.provider !== parsed.provider)
+          throw new Error("不能修改已有配置的供应商，请新建配置");
         const profile: Profile = {
           ...parsed,
           id: old?.id || crypto.randomUUID(),
@@ -73,36 +95,44 @@ export class Service {
       case "project.blank":
         return s.createProject(args.name || "字幕项目");
       case "project.rename": {
-        const p = s.project(args.id);
-        p.name = String(args.name).slice(0, 160);
-        s.saveProject(p);
+        const { p, revision } = editableProject();
+        p.name = String(args.name || "")
+          .trim()
+          .slice(0, 160);
+        if (!p.name) throw new Error("项目名称不能为空");
+        s.saveProject(p, revision);
         return p;
       }
       case "subtitle.import": {
-        const p = s.project(args.id),
-          doc = parseSubtitles(String(args.text));
+        const { p, revision } = editableProject();
+        const doc = parseSubtitles(String(args.text));
         validateDocument(doc, p.media?.durationMs);
         doc.revision = p.document.revision + 1;
         doc.language = args.language || "auto";
         p.document = doc;
-        s.saveProject(p);
+        s.saveProject(p, revision);
         return p;
       }
       case "subtitle.edit": {
-        const p = s.project(args.id);
-        if (
-          args.expectedRevision !== undefined &&
-          args.expectedRevision !== p.document.revision
-        )
-          throw new Error("字幕已被其他窗口修改，请刷新后重试");
+        const { p, revision } = editableProject();
         if (args.translation !== undefined) {
           const c = p.document.cues.find((c) => c.id === args.cueId);
           if (!c) throw new Error("字幕不存在");
-          c.translations[args.language] = {
-            text: String(args.translation),
-            sourceRevision: c.revision,
-            provider: "manual",
-          };
+          if (
+            typeof args.language !== "string" ||
+            !args.language.trim() ||
+            args.language.length > 40
+          )
+            throw new Error("请选择译文语言");
+          const text = String(args.translation);
+          if (text.length > 20000) throw new Error("译文过长");
+          if (text.trim())
+            c.translations[args.language] = {
+              text,
+              sourceRevision: c.revision,
+              provider: "manual",
+            };
+          else delete c.translations[args.language];
           p.document.revision++;
         } else {
           const patch: { text?: string; startMs?: number; endMs?: number } = {};
@@ -115,33 +145,44 @@ export class Service {
           p.document = editCue(p.document, args.cueId, patch);
         }
         validateDocument(p.document, p.media?.durationMs);
-        s.saveProject(p);
+        s.saveProject(p, revision);
         return p;
       }
       case "subtitle.split": {
-        const p = s.project(args.id);
+        const { p, revision } = editableProject();
         p.document = splitCue(p.document, args.cueId, args.at);
-        s.saveProject(p);
+        validateDocument(p.document, p.media?.durationMs);
+        s.saveProject(p, revision);
         return p;
       }
       case "subtitle.merge": {
-        const p = s.project(args.id);
+        const { p, revision } = editableProject();
         p.document = mergeCues(p.document, args.cueId);
-        s.saveProject(p);
+        validateDocument(p.document, p.media?.durationMs);
+        s.saveProject(p, revision);
         return p;
       }
       case "subtitle.replace": {
-        const p = s.project(args.id);
-        if (!args.search) throw new Error("查找内容不能为空");
+        const { p, revision } = editableProject();
+        if (typeof args.search !== "string" || !args.search)
+          throw new Error("查找内容不能为空");
+        let changed = false;
         for (const c of p.document.cues)
           if (c.text.includes(args.search)) {
-            c.text = c.text
+            const text = c.text
               .split(args.search)
               .join(String(args.replacement || ""));
+            if (text === c.text) continue;
+            c.text = text;
             c.revision++;
+            delete c.words;
+            changed = true;
           }
-        p.document.revision++;
-        s.saveProject(p);
+        validateDocument(p.document, p.media?.durationMs);
+        if (changed) {
+          p.document.revision++;
+          s.saveProject(p, revision);
+        }
         return p;
       }
       case "subtitle.export": {
@@ -157,9 +198,9 @@ export class Service {
         );
       }
       case "style.save": {
-        const p = s.project(args.id);
+        const { p, revision } = editableProject();
         p.style = styleSchema.parse(args.style);
-        s.saveProject(p);
+        s.saveProject(p, revision);
         return p;
       }
       case "job.create": {
@@ -175,6 +216,11 @@ export class Service {
         }
         if (args.kind !== "transcribe" && !p.document.cues.length)
           throw new Error("请先生成或导入字幕");
+        if (args.kind === "transcribe" && !p.media?.audioTracks.length)
+          throw new Error("视频没有音轨；可导入字幕直接烧录");
+        if (args.kind === "render" && !p.media) throw new Error("请先导入视频");
+        if (args.kind === "translate" && !params.targetLanguage?.trim())
+          throw new Error("请选择目标语言");
         if (args.kind === "render")
           exportSubtitles(
             p.document,
@@ -186,26 +232,35 @@ export class Service {
         return s.createJob(p.id, args.kind as JobKind, params);
       }
       case "job.cancel":
-        return s.updateJob(args.id, {
-          status: "cancelled",
-          phase: "已请求取消",
+        return this.atomic(() => {
+          const job = s.job(args.id);
+          if (!["queued", "running"].includes(job.status))
+            throw new Error("任务已结束，不能取消");
+          return s.updateJob(args.id, {
+            status: "cancelled",
+            phase: job.status === "running" ? "已请求取消" : "已取消",
+          });
         });
       case "job.retry": {
-        const job = s.job(args.id);
-        if (["queued", "running"].includes(job.status))
-          throw new Error("任务仍在执行");
-        const cp = s.checkpoint(job.id);
-        if (args.confirmPaidRetry) {
-          for (const c of cp.chunks || [])
-            if (c.state === "submitting") c.state = "new";
-          for (const [key, value] of Object.entries(cp.batches || {}))
-            if ((value as any).state === "submitting") delete cp.batches[key];
-        }
-        s.saveCheckpoint(job.id, cp);
-        return s.updateJob(job.id, {
-          status: "queued",
-          error: undefined,
-          phase: "等待重试",
+        return this.atomic(() => {
+          const job = s.job(args.id);
+          if (!["attention", "failed", "cancelled"].includes(job.status))
+            throw new Error("仅失败、取消或待确认任务可以重试");
+          if (job.phase === "已请求取消" && Date.now() - job.updatedAt < 90000)
+            throw new Error("正在取消任务，请等待处理进程退出后重试");
+          const cp = s.checkpoint(job.id);
+          if (args.confirmPaidRetry) {
+            for (const c of cp.chunks || [])
+              if (c.state === "submitting") c.state = "new";
+            for (const [key, value] of Object.entries(cp.batches || {}))
+              if ((value as any).state === "submitting") delete cp.batches[key];
+          }
+          s.saveCheckpoint(job.id, cp);
+          return s.updateJob(job.id, {
+            status: "queued",
+            error: undefined,
+            phase: "等待重试",
+          });
         });
       }
       case "job.apply": {

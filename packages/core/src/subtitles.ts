@@ -43,7 +43,7 @@ export function validateDocument(
       c.endMs > durationMs + 100
     )
       throw new Error("字幕起止时间无效或超出视频");
-    if (typeof c.text !== "string" || c.text.length > 20000)
+    if (typeof c.text !== "string" || !c.text.trim() || c.text.length > 20000)
       throw new Error("字幕文字无效");
   }
 }
@@ -174,6 +174,10 @@ export function editCue(
   const c = next.cues.find((c) => c.id === id);
   if (!c) throw new Error("字幕不存在");
   if (patch.text !== undefined && patch.text !== c.text) c.revision++;
+  if (
+    Object.entries(patch).some(([key, value]) => c[key as keyof Cue] !== value)
+  )
+    delete c.words;
   Object.assign(c, patch);
   next.revision++;
   validateDocument(next);
@@ -187,10 +191,11 @@ export function splitCue(
   const next = structuredClone(doc);
   const i = next.cues.findIndex((c) => c.id === id);
   const c = next.cues[i];
-  if (!c || at <= c.startMs || at >= c.endMs)
+  if (!c || !Number.isFinite(at) || at <= c.startMs || at >= c.endMs)
     throw new Error("拆分点必须位于字幕内部");
   const ratio = (at - c.startMs) / (c.endMs - c.startMs);
   const chars = [...c.text];
+  if (chars.length < 2) throw new Error("字幕文字不足以拆分");
   const pivot = Math.max(
     1,
     Math.min(chars.length - 1, Math.round(chars.length * ratio)),
@@ -202,6 +207,7 @@ export function splitCue(
     cue(chars.slice(pivot).join(""), at, c.endMs),
   );
   next.revision++;
+  validateDocument(next);
   return next;
 }
 export function mergeCues(doc: SubtitleDocument, id: string): SubtitleDocument {
@@ -216,6 +222,7 @@ export function mergeCues(doc: SubtitleDocument, id: string): SubtitleDocument {
     cue(`${a.text} ${b.text}`, a.startMs, Math.max(a.endMs, b.endMs)),
   );
   next.revision++;
+  validateDocument(next);
   return next;
 }
 export function combineTranscripts(

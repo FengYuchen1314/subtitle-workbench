@@ -111,3 +111,15 @@ test("translation rejects dropped, duplicated and invented IDs", () => {
     a: "A",
   });
 });
+
+test("edits clear stale word timestamps and splitting cannot create empty cues", () => {
+  const doc = parseSubtitles(sample),
+    c = doc.cues[0];
+  c.words = [{ text: "你好", startMs: 1250, endMs: 1800 }];
+  assert.equal(editCue(doc, c.id, { text: "改写" }).cues[0].words, undefined);
+  assert.equal(editCue(doc, c.id, { startMs: 1000 }).cues[0].words, undefined);
+  const single = parseSubtitles("1\n00:00:00,000 --> 00:00:01,000\n你");
+  assert.throws(() => splitCue(single, single.cues[0].id, 500), /不足/);
+  assert.throws(() => splitCue(doc, c.id, NaN), /拆分点/);
+  assert.throws(() => editCue(doc, c.id, { text: " " }), /字幕文字/);
+});

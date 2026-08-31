@@ -2,6 +2,8 @@
 
 自托管网页、Windows/macOS 桌面客户端、安卓原生客户端。中文界面，使用自己的模型账号；不需要注册平台账号，不做项目同步。
 
+三个运行端共用标准 Ant Design 6 界面，采用默认组件样式与中文语言包。项目、字幕表格、模型配置、任务队列和确认弹窗均使用 Ant Design 组件。
+
 **这是 0.1 开发预览版，不是已完成全部厂商和设备验收的正式发行版。** 已有实际处理代码和安装构建，不是界面演示。云服务均标记为“未联调”，首次使用前请用短片核对账号、地区、模型和费用。详见 [验收记录](docs/VERIFICATION.md) 与 [厂商接入表](docs/PROVIDERS.md)。
 
 ## 使用流程
@@ -77,16 +79,16 @@ Kotlin 原生层负责文件流、Keystore、网络、SQLite 和前台任务。M
 
 ## 项目结构
 
-| 目录 | 内容 |
-| --- | --- |
-| `packages/core` | 毫秒字幕协议、版本、SRT/VTT/ASS、校验 |
+| 目录                 | 内容                                                  |
+| -------------------- | ----------------------------------------------------- |
+| `packages/core`      | 毫秒字幕协议、版本、SRT/VTT/ASS、校验                 |
 | `packages/providers` | 16 家 ASR、自定义协议、9 个翻译配置类型、4 种对象存储 |
-| `packages/runtime` | Node SQLite、加密、FFmpeg、持久化任务 |
-| `packages/ui` | 三端共用 React 界面与运行端网关 |
-| `apps/web` | Next.js 页面与 `/api/v1` |
-| `apps/desktop` | Electron 主进程、预加载桥接、独立 worker |
-| `apps/android` | Capacitor 页面及 Kotlin 原生引擎 |
-| `tests` | 契约、字幕、任务、媒体测试及 TS/Kotlin 共用样本 |
+| `packages/runtime`   | Node SQLite、加密、FFmpeg、持久化任务                 |
+| `packages/ui`        | 三端共用 React 界面与运行端网关                       |
+| `apps/web`           | Next.js 页面与 `/api/v1`                              |
+| `apps/desktop`       | Electron 主进程、预加载桥接、独立 worker              |
+| `apps/android`       | Capacitor 页面及 Kotlin 原生引擎                      |
+| `tests`              | 契约、字幕、任务、媒体测试及 TS/Kotlin 共用样本       |
 
 ## 检查与文档
 

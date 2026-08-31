@@ -94,7 +94,7 @@ object Subtitles {
             require(it.optLong("startMs", -1) >= 0 && it.optLong("endMs") > it.optLong("startMs")) {
                 "无效字幕时间"
             }
-            require(it.s("text").length <= 20000) { "单条字幕过长" }
+            require(it.s("text").isNotBlank() && it.s("text").length <= 20000) { "字幕文字为空或过长" }
         }
     }
 

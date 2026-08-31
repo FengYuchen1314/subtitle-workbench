@@ -5,6 +5,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProtocolTest {
+    @Test(expected = IllegalArgumentException::class)
+    fun blankSourceCannotBeSaved() {
+        Subtitles.validate(emptyDocument().put("cues", arr(listOf(cue(" ", 0, 1000)))))
+    }
+
     @Test
     fun timelineRecoveryMatchesTypeScript() {
         val fixture =

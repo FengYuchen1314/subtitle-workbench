@@ -4,6 +4,17 @@
 
 **尚未完成实施方案的全部验收。** 以下区分实际执行的测试、构建产物和仍需外部环境完成的项目。不将合成响应当作厂商真实联调，也不将模拟器结果当作安卓真机验收。
 
+## 2026-08-31：Ant Design 界面回归
+
+共享界面改为 Ant Design 6 默认主题与中文组件；Next.js 使用样式注册器，Electron 和 Capacitor 复用相同组件。本轮使用独立的 `data/ant-review` 测试目录，没有访问真实厂商账号。
+
+- TypeScript 类型检查、50 项单元/契约测试、3 项 FFmpeg 集成测试、1 项 HTTP API 集成测试通过。
+- Next.js 生产构建、Electron 构建、Android 前端同步及 Debug APK 编译通过；Kotlin JUnit 6 项通过。
+- Windows Electron 开发构建通过隐藏窗口启动、受限桥接及独立 worker 双语烧录，记录在 `data/ant-review/electron/smoke-result.json`。
+- 浏览器实测登录、字幕原文/译文自动保存、非法时间报错、输出前等待保存、字体样式保存、双语烧录、配置必填校验与切换厂商清空密钥草稿。手机页头适配已修正。
+- 新增回归覆盖：空白原文替换拒绝保存、清空译文后禁止双语导出、修改文字/时间后清除过期词级时间戳、字幕版本冲突、已结束任务不可取消/重复重试、未知付费请求默认安全恢复、跨厂商凭据隔离。
+- Android 仪器测试中的旧欢迎文案断言已更新为 Ant Design 表格就绪检查，并已编译；本轮未重跑模拟器和真机测试。下面的安装、三小时素材及模拟器记录属于 8 月 29 日的基线验收，不表示本轮重新执行。
+
 ## 已实际通过
 
 | 项目                  | 结果               | 范围                                                                                         |
@@ -56,7 +67,7 @@ Android API 36 x86_64 模拟器上的 `connectedDebugAndroidTest` 结果为 `4 t
 
 ## 安全检查范围
 
-`npm audit --omit=dev`：0 个已报告生产依赖漏洞。完整 audit 仍报告构建依赖链 1 个 low、3 个 moderate（esbuild、Capacitor CLI 的 xcode/uuid 链）；没有将这个结果描述为“没有任何漏洞”。未强制降级或替换未经验证的构建工具。正式发布前应重新审计 npm、Gradle 与内嵌媒体二进制。
+2026-08-31 的 `npm audit --omit=dev`：0 个已报告生产依赖漏洞。已更新 esbuild 修复其 low 级问题；完整 audit 仍报告构建依赖链 3 个 moderate（Capacitor CLI 的 xcode/uuid 链）。没有强制降级 Capacitor 或把此结果描述为“没有任何漏洞”。正式发布前应重新审计 npm、Gradle 与内嵌媒体二进制。
 
 已测试基础路径限制、凭据加密、默认拒绝内网地址和跨站写入；这不是渗透测试报告。单管理员家庭部署不得直接当成公共多租户服务。
 
@@ -80,4 +91,4 @@ HTTP 测试需要一个专用 QA 服务和测试视频，设置 `SUBTITLE_TEST_B
 
 桌面包内测试：设置隔离的 `SUBTITLE_SMOKE_DATA` 和测试视频路径 `SUBTITLE_SMOKE_MEDIA`，运行可执行文件加 `--smoke-test`；测试使用隐藏窗口，生成 JSON 记录后退出。不要指向已有用户数据目录。
 
-`.github/workflows/verify.yml` 尚未在远程平台执行。需要项目所有者提供对应环境、云服务凭据与正式签名证书后，才能完成剩余验收。
+GitHub Actions 基线构建已在远程通过：[26ef8a3 构建记录](https://github.com/FengYuchen1314/subtitle-workbench/actions/runs/33231882730)，包含网页/Docker、Windows、macOS Intel/Apple Silicon 与 Android。每次推送会重新执行；当前提交结果以仓库 Actions 页面为准。厂商真实联调与正式签名仍需要项目所有者的凭据及证书。

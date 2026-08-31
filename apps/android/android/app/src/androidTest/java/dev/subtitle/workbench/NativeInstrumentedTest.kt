@@ -31,7 +31,7 @@ class NativeInstrumentedTest {
                 scenario.onActivity { activity ->
                     val web = activity.findViewById<WebView>(com.getcapacitor.android.R.id.webview)
                     web.evaluateJavascript(
-                        "JSON.stringify({text:document.title==='字幕工作台'&&document.body.innerText.includes('给视频，加上好字幕'),native:window.Capacitor?.isNativePlatform?.(),plugin:window.Capacitor?.isPluginAvailable?.('SubtitleEngine')})"
+                        "JSON.stringify({text:document.title==='字幕工作台'&&document.body.innerText.includes('视频项目')&&!!document.querySelector('.ant-table'),native:window.Capacitor?.isNativePlatform?.(),plugin:window.Capacitor?.isPluginAvailable?.('SubtitleEngine')})"
                     ) {
                         result.set(it)
                         evaluated.countDown()
