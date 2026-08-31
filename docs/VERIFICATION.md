@@ -14,6 +14,7 @@
 - 浏览器实测登录、字幕原文/译文自动保存、非法时间报错、输出前等待保存、字体样式保存、双语烧录、配置必填校验与切换厂商清空密钥草稿。手机页头适配已修正。
 - 新增回归覆盖：空白原文替换拒绝保存、清空译文后禁止双语导出、修改文字/时间后清除过期词级时间戳、字幕版本冲突、已结束任务不可取消/重复重试、未知付费请求默认安全恢复、跨厂商凭据隔离。
 - Android 仪器测试中的旧欢迎文案断言已更新为 Ant Design 表格就绪检查，并已编译；本轮未重跑模拟器和真机测试。下面的安装、三小时素材及模拟器记录属于 8 月 29 日的基线验收，不表示本轮重新执行。
+- [GitHub Actions：cfcc128](https://github.com/FengYuchen1314/subtitle-workbench/actions/runs/33386270120) 的五项任务全部通过：网页/Docker（包括容器启动）、Windows、macOS Intel、macOS Apple Silicon、Android（包括 Kotlin 单元测试）。四份安装产物已上传至该次运行的 Artifacts：`desktop-windows-latest`、`desktop-macos-15-intel`、`desktop-macos-15`、`android-debug`。安装包仍为开发预览签名状态，不代表正式签名或全部设备验收完成。
 
 ## 已实际通过
 
@@ -58,8 +59,8 @@ Android API 36 x86_64 模拟器上的 `connectedDebugAndroidTest` 结果为 `4 t
 ## 尚未通过的验收
 
 - **16 家云端 ASR、所有云翻译、真实对象存储：未联调。** 缺少真实账号与开通的模型/桶。契约用例覆盖基础参数和签名形态，不是每个地区、每个模型分支的完整官方签名向量与计费联调。见 [逐厂商记录](PROVIDERS.md)。
-- **macOS Intel / Apple Silicon：未构建 DMG、未安装、未运行。** 已提供对应原生构建脚本和 CI 配置，本地没有 macOS 构建环境。
-- **Docker / Linux：未实际运行容器。** 提供 Dockerfile、Compose、独立 worker、持久卷与 CI 启动检查；当前机器无 Docker。Windows 的 Next.js 构建不能替代 Linux 容器验收。
+- **macOS Intel / Apple Silicon：CI 已构建 DMG，尚未人工安装验收。** 远程执行了 FFmpeg 集成测试与安装包构建；不等同于在实际 Mac 上安装、打开和完成全部界面操作。
+- **Docker / Linux：CI 已通过容器构建与启动检查，完整部署验收未完成。** 尚需验证实际服务器上的 Compose 升级、备份恢复、反向代理和长任务；当前 Windows 机器无 Docker。
 - **安卓真机：未连接。** API 36 模拟器已通过启动、Keystore、网络策略、抽音频和 Media3 双语烧录；系统文件选择/保存、具体设备硬件编解码、长视频、热降频、空间不足、通知权限、进程终止和后台超时仍需真机测试。
 - 尚未做真实限流与配额、云端链接过期、临时对象清理权限故障、填满磁盘、真实多小时断网恢复、全字体/多语言字形、所有输入格式的验收。
 - 术语文本已传给 LLM，DeepL 使用上下文；尚未集成 Google/Azure 各自的专用术语库资源。
