@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    image: subtitle-workbench:local
+    image: ${SUBTITLE_IMAGE:-ghcr.io/fengyuchen1314/subtitle-workbench:latest}
     restart: unless-stopped
     ports:
       - "${SUBTITLE_BIND_ADDRESS:-127.0.0.1}:3000:3000"
@@ -27,7 +27,7 @@ services:
       timeout: 5s
       retries: 3
   worker:
-    image: subtitle-workbench:local
+    image: ${SUBTITLE_IMAGE:-ghcr.io/fengyuchen1314/subtitle-workbench:latest}
     build: .
     command: ["node", "worker/worker.cjs"]
     restart: unless-stopped

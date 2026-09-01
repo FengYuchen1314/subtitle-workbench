@@ -7,7 +7,7 @@
 - Android：`npm run android:sync` 后用 Gradle 生成 Debug APK；API 36 x86_64 模拟器已通过界面和 Media3 短片闭环，正式 Release APK 需要配置自有 keystore，真机兼容性仍需逐设备验证。
 - 自托管：Dockerfile 和 Compose 使用 Node 24、FFmpeg/libass、Noto 字体、SQLite 文件卷和两个独立进程。
 
-`.github/workflows/verify.yml` 提供这些环境的构建步骤。没有自动创建远程仓库、上传代码或发布版本；需要项目所有者自行启用 CI。
+`.github/workflows/verify.yml` 在每次 push 后执行全部平台测试与构建。所有任务成功后，为该提交创建一个独立的 GitHub 预发行版本，上传 Windows EXE、macOS Intel/Apple Silicon DMG、Android Debug APK 和 `SHA256SUMS.txt`。网页镜像发布到 GHCR：每个 push 都有不可变的 `sha-<提交前 12 位>` 标签，`main` 分支同时更新 `latest`。Pull Request 只构建和测试，不发布。
 
 ## 正式签名
 

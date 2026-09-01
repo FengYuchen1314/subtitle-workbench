@@ -1,10 +1,48 @@
 # 字幕工作台
 
+[![Build, verify and publish](https://github.com/FengYuchen1314/subtitle-workbench/actions/workflows/verify.yml/badge.svg)](https://github.com/FengYuchen1314/subtitle-workbench/actions/workflows/verify.yml)
+[![GitHub Releases](https://img.shields.io/github/v/release/FengYuchen1314/subtitle-workbench?include_prereleases&label=development%20build)](https://github.com/FengYuchen1314/subtitle-workbench/releases)
+
 自托管网页、Windows/macOS 桌面客户端、安卓原生客户端。中文界面，使用自己的模型账号；不需要注册平台账号，不做项目同步。
 
 三个运行端共用标准 Ant Design 6 界面，采用默认组件样式与中文语言包。项目、字幕表格、模型配置、任务队列和确认弹窗均使用 Ant Design 组件。
 
 **这是 0.1 开发预览版，不是已完成全部厂商和设备验收的正式发行版。** 已有实际处理代码和安装构建，不是界面演示。云服务均标记为“未联调”，首次使用前请用短片核对账号、地区、模型和费用。详见 [验收记录](docs/VERIFICATION.md) 与 [厂商接入表](docs/PROVIDERS.md)。
+
+## 下载与安装
+
+每次 push 通过测试后，GitHub 会创建一个与该提交对应的[预发行版本](https://github.com/FengYuchen1314/subtitle-workbench/releases)。下载最新构建中适合系统的文件：
+
+| 系统              | 下载文件              | 安装方式                                   |
+| ----------------- | --------------------- | ------------------------------------------ |
+| Windows 10/11 x64 | `*-Windows-x64.exe`   | 运行安装器并选择安装目录                   |
+| Apple Silicon Mac | `*-macOS-arm64.dmg`   | 打开 DMG，把应用拖入“应用程序”             |
+| Intel Mac         | `*-macOS-x64.dmg`     | 打开 DMG，把应用拖入“应用程序”             |
+| Android 8.0+      | `*-Android-debug.apk` | 允许浏览器或文件管理器“安装未知应用”后安装 |
+
+同时下载 `SHA256SUMS.txt`，在安装前核对文件：
+
+```powershell
+# Windows PowerShell
+Get-FileHash .\Subtitle-Workbench-*.exe -Algorithm SHA256
+```
+
+```sh
+# macOS / Linux
+shasum -a 256 Subtitle-Workbench-*.dmg
+```
+
+这些是自动构建的开发预览包，尚无 Windows 商业代码签名、Apple Developer ID 公证或 Android 正式签名。只从本仓库下载并核对校验值；macOS 若拦截，可在“系统设置 → 隐私与安全性”中检查发布者信息并选择是否打开。客户端不会自动更新，升级时重新下载安装包；已有工作区数据不会随安装包自动同步到其他设备。
+
+## 第一次使用
+
+1. 打开“模型与存储”，添加自己的语音识别配置。选择服务商、模型、地区或地址并填写 API Key；配置会显示“未联调”，应先用短视频核对时间戳、语言和费用。
+2. 如需译文，再添加独立的翻译配置。ASR 与翻译可以使用不同厂商。
+3. 导入视频，选择语音识别配置生成原文；也可以直接导入 SRT/VTT 跳过识别。
+4. 校对文字和时间，必要时拆分、合并或查找替换。修改原文后，对应译文会标记为过期。
+5. 选择原文、译文或双语模式，导出 SRT/VTT/ASS；需要成片时再单独执行“烧录视频”。导出字幕不会重新编码视频，烧录也不会隐式调用 ASR 或翻译。
+
+桌面和安卓版本直接处理本机文件，不需要自托管服务器。桌面凭据由系统安全存储保护；安卓凭据由 Keystore 保护。服务商字段说明见[厂商配置文档](docs/PROVIDERS.md)。
 
 ## 使用流程
 
@@ -39,18 +77,41 @@ npm run worker
 
 ## Docker 自托管
 
+`main` 每次 push 后会把通过测试的镜像发布为 `ghcr.io/fengyuchen1314/subtitle-workbench:latest`，每个提交另有不可变的 `sha-<提交前12位>` 标签。
+
 ```sh
-npm run init:env
+git clone https://github.com/FengYuchen1314/subtitle-workbench.git
+cd subtitle-workbench
+node scripts/init-env.mjs
+mkdir media
+docker compose pull
+docker compose up -d
+```
+
+打开 http://localhost:3000，在初始化页输入 `.env` 里的 `SUBTITLE_SETUP_TOKEN`，再设置至少 12 位的管理员密码。默认只监听本机；查看运行状态和日志：
+
+```sh
+docker compose ps
+docker compose logs -f web worker
+```
+
+要使用当前源码在本机重新构建镜像：
+
+```sh
+# 仅当 .env 尚不存在时执行
+node scripts/init-env.mjs
 docker compose up -d --build
 ```
 
-先创建一个空的 `media` 目录，或在 `.env` 设置 `SUBTITLE_MEDIA_DIR`。默认仅绑定本机 3000 端口。打开 http://localhost:3000，使用 `.env` 内的 `SUBTITLE_SETUP_TOKEN` 初始化管理员。
+如果已经有 `.env`，不要再次运行初始化命令。管理员挂载媒体目录由 `.env` 的 `SUBTITLE_MEDIA_DIR` 指定；网页上传的视频保存在 Docker 数据卷中。
 
 需要家庭网络访问时，配置 `SUBTITLE_BIND_ADDRESS` 和 `SUBTITLE_PUBLIC_ORIGIN`；公网使用 HTTPS 反向代理，同时设置 `SUBTITLE_COOKIE_SECURE=true`。SQLite 与文件均在 `subtitle-data` 卷中；媒体挂载只读。不要把该卷放在 NFS 上，也不要横向扩容多个网页实例。
 
 **备份必须包含数据库、视频文件和主密钥。遗失主密钥将无法解密供应商凭据。**
 
 ## 桌面客户端
+
+普通使用者直接安装 GitHub Releases 中的 EXE 或对应架构 DMG。以下命令仅供从源码开发和打包：
 
 ```sh
 npm run desktop
@@ -62,6 +123,8 @@ npm run desktop:package
 桌面版在本机运行 SQLite、处理进程和模型请求，不依赖 Next.js 服务。凭据由 Electron `safeStorage` 保护；渲染界面关闭 Node.js 权限，通过受限 IPC 访问本地能力。Electron 44 需要 Windows 10+、macOS 13+，提供 64 位构建。
 
 ## 安卓客户端
+
+普通使用者直接安装 GitHub Releases 中的 Debug APK。以下命令仅供从源码构建：
 
 需要 JDK 21、Android SDK 36，设置 `JAVA_HOME`、`ANDROID_HOME`。
 
@@ -107,4 +170,4 @@ npm run test:long
 - [验证结果与仍需完成的验收](docs/VERIFICATION.md)
 - [安装包、签名与第三方许可](docs/DISTRIBUTION.md)
 
-CI 提供 Linux 网页/Docker、Windows、macOS Intel/Apple Silicon 和安卓构建。工作流配置本身不代表已经在这些系统执行通过。
+每次 push 都会运行 Linux 网页/Docker、Windows、macOS Intel/Apple Silicon 和 Android 构建；全部成功后才会创建预发行版本。每个构建的实际结果以 [GitHub Actions](https://github.com/FengYuchen1314/subtitle-workbench/actions/workflows/verify.yml) 为准，不能用工作流配置本身代替验收结果。
