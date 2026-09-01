@@ -111,7 +111,10 @@ export function normalize(provider: string, raw: any): Transcript {
           return match
             ? [
                 timed(
-                  lines.slice(time + 1).join("\n"),
+                  lines
+                    .slice(time + 1)
+                    .join("\n")
+                    .trim(),
                   parse(match[1]),
                   parse(match[2]),
                 ),

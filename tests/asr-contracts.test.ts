@@ -129,7 +129,11 @@ const responses = (id: string): any[] =>
         },
       ],
       cloudflare: [
-        { result: { segments: [{ text: "hello", start: 1, end: 2 }] } },
+        {
+          result: {
+            vtt: "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhello\n",
+          },
+        },
       ],
     }) as Record<string, any[]>
   )[id];

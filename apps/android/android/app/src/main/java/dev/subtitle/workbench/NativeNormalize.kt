@@ -115,7 +115,7 @@ object NativeNormalize {
                                     val range = lines[index].split("-->")
                                     if (range.size == 2)
                                         timed(
-                                            lines.drop(index + 1).joinToString("\n"),
+                                            lines.drop(index + 1).joinToString("\n").trim(),
                                             stamp(range[0].trim()),
                                             stamp(range[1].trim().substringBefore(' ')),
                                             1000.0,
