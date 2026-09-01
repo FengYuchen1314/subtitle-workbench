@@ -1,8 +1,21 @@
 # 验证记录
 
-日期：2026-08-29。版本：0.1.0 开发预览。执行环境：Windows x64、Node 24、FFmpeg 8.1.1、JDK 21、Android SDK 36。
+更新日期：2026-09-01。版本：0.1.0 开发预览。当前本地执行环境：Windows x64、Node 24、FFmpeg 8.1.1、便携 JDK 21、Android SDK 36。
 
 **尚未完成实施方案的全部验收。** 以下区分实际执行的测试、构建产物和仍需外部环境完成的项目。不将合成响应当作厂商真实联调，也不将模拟器结果当作安卓真机验收。
+
+## 2026-09-01：厂商更新、AI 字幕操作与配置测试
+
+- 更新供应商目录到 2026-09-01：22 家云 ASR、2 种自定义 ASR、12 种翻译 / AI 配置和 4 种对象存储。新增 Mistral、xAI、Soniox、Gladia、Rev AI、Cloudflare；更新 OpenAI、阿里、DeepSeek、Gemini、Claude、Qwen-MT 等模型选项。
+- 22 家云 ASR 均有真实请求分支、异步接口的查询分支、时间戳规范化与错误契约；69 项 TypeScript 单元 / 契约测试全部通过。测试响应为本地样本，所有云账号仍未联调。
+- 新增独立 `segment` 和 `rewrite` 任务。AI 断句必须逐 ID 完整保留原字符，时间由本地算法计算；指令修改必须返回全部稳定 ID，不能改变时间轴。相关 TypeScript 和 Kotlin 协议测试通过。
+- 配置页按语音识别、字幕翻译、临时存储分开，字段按凭据、区域 / 地址和高级选项分组；显示模型能力与资料核对日期。保存后可执行小型真实连接测试，成功与失败信息会写回配置。
+- 本地通过 `npm run typecheck`、69 项 `npm test`、3 项真实 FFmpeg 测试、三小时合成视频三种输出、Next.js 生产构建、独立 worker 构建和 Electron 构建 / NSIS 打包。
+- Windows 打包后的 Electron 应用通过隐藏窗口冒烟：渲染进程隔离、受限桥接、独立 worker 双语烧录、AAC 原音保留均通过。
+- Android 前端同步、Kotlin 编译、8 项原生协议测试及 Debug APK 打包通过。Windows 中文路径仍会使 Gradle 标准 JUnit 任务找不到测试类，因此本地按仓库脚本直接执行已经编译的同一测试类；Linux CI 继续使用标准 `testDebugUnitTest`。
+- 浏览器实际检查了 Ant Design 配置分栏、当前模型说明、AI 优化页和 390×844 手机宽度；无横向溢出。发现并修复 Ant Design 6 `maskClosable` 弃用警告，以及 Node 24.14 下开发启动脚本传递 `--env-file-if-exists` 导致 Next 子进程退出的问题。
+- `npm audit --omit=dev` 报告 0 个生产依赖漏洞；完整 audit 仍为 Capacitor CLI → xcode → uuid 链的 3 个 moderate，自动建议会强制降级 Capacitor，未采用。
+- 本机没有 Docker，容器构建 / 启动、macOS 两种架构和标准 Android JUnit 留给本次 push 的 GitHub Actions 验证。
 
 ## 2026-08-31：Ant Design 界面回归
 
@@ -58,7 +71,7 @@ Android API 36 x86_64 模拟器上的 `connectedDebugAndroidTest` 结果为 `4 t
 
 ## 尚未通过的验收
 
-- **16 家云端 ASR、所有云翻译、真实对象存储：未联调。** 缺少真实账号与开通的模型/桶。契约用例覆盖基础参数和签名形态，不是每个地区、每个模型分支的完整官方签名向量与计费联调。见 [逐厂商记录](PROVIDERS.md)。
+- **22 家云端 ASR、所有云翻译、真实对象存储：未联调。** 缺少真实账号与开通的模型/桶。契约用例覆盖基础参数和签名形态，不是每个地区、每个模型分支的完整官方签名向量与计费联调。见 [逐厂商记录](PROVIDERS.md)。
 - **macOS Intel / Apple Silicon：CI 已构建 DMG，尚未人工安装验收。** 远程执行了 FFmpeg 集成测试与安装包构建；不等同于在实际 Mac 上安装、打开和完成全部界面操作。
 - **Docker / Linux：CI 已通过容器构建与启动检查，完整部署验收未完成。** 尚需验证实际服务器上的 Compose 升级、备份恢复、反向代理和长任务；当前 Windows 机器无 Docker。
 - **安卓真机：未连接。** API 36 模拟器已通过启动、Keystore、网络策略、抽音频和 Media3 双语烧录；系统文件选择/保存、具体设备硬件编解码、长视频、热降频、空间不足、通知权限、进程终止和后台超时仍需真机测试。

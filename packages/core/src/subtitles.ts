@@ -225,6 +225,146 @@ export function mergeCues(doc: SubtitleDocument, id: string): SubtitleDocument {
   validateDocument(next);
   return next;
 }
+
+const comparableText = (value: string) =>
+  value.normalize("NFKC").replace(/[\s\u200b]+/g, "");
+
+/**
+ * Applies semantic break decisions returned by an AI model without allowing the
+ * model to invent timestamps or drop transcript text. Timing is calculated by
+ * this function and therefore remains deterministic and testable.
+ */
+export function applySegmentationPlan(
+  doc: SubtitleDocument,
+  plan: Record<string, string[]>,
+  options: {
+    maxCharacters: number;
+    maxDurationMs: number;
+    minCharacters?: number;
+  },
+): SubtitleDocument {
+  const next = structuredClone(doc);
+  const output: Cue[] = [];
+  for (const original of next.cues) {
+    const parts = plan[original.id];
+    if (
+      !Array.isArray(parts) ||
+      !parts.length ||
+      parts.some((part) => typeof part !== "string" || !part.trim()) ||
+      comparableText(parts.join("")) !== comparableText(original.text)
+    )
+      throw new Error(`AI 断句未完整保留字幕：${original.id}`);
+    const weights = parts.map((part) => Math.max(1, [...part].length));
+    const total = weights.reduce((sum, value) => sum + value, 0);
+    let used = 0;
+    parts.forEach((text, index) => {
+      const startMs =
+        index === 0
+          ? original.startMs
+          : Math.round(
+              original.startMs +
+                ((original.endMs - original.startMs) * used) / total,
+            );
+      used += weights[index];
+      const endMs =
+        index === parts.length - 1
+          ? original.endMs
+          : Math.round(
+              original.startMs +
+                ((original.endMs - original.startMs) * used) / total,
+            );
+      const item = cue(
+        text.trim(),
+        startMs,
+        Math.max(startMs + 1, endMs),
+        index === 0 ? original.id : crypto.randomUUID(),
+      );
+      item.revision = original.revision + 1;
+      item.speaker = original.speaker;
+      if (original.words?.length) {
+        const words = original.words.filter(
+          (word) =>
+            (word.startMs + word.endMs) / 2 >= startMs &&
+            (word.startMs + word.endMs) / 2 < endMs,
+        );
+        if (words.length) item.words = words;
+      }
+      output.push(item);
+    });
+  }
+  if (Object.keys(plan).some((id) => !next.cues.some((cue) => cue.id === id)))
+    throw new Error("AI 断句返回了未知字幕 ID");
+
+  const maxCharacters = options.maxCharacters;
+  const maxDurationMs = options.maxDurationMs;
+  const minCharacters = options.minCharacters ?? Math.min(8, maxCharacters);
+  const merged: Cue[] = [];
+  for (const current of output) {
+    const previous = merged.at(-1);
+    const combinedText = previous ? `${previous.text}${current.text}` : "";
+    const canMerge =
+      previous &&
+      previous.speaker === current.speaker &&
+      current.startMs - previous.endMs <= 350 &&
+      current.endMs - previous.startMs <= maxDurationMs &&
+      [...combinedText].length <= maxCharacters &&
+      ([...previous.text].length < minCharacters ||
+        [...current.text].length < minCharacters);
+    if (previous && canMerge) {
+      previous.text =
+        /[\u3400-\u9fff]$/.test(previous.text) ||
+        /^[\u3400-\u9fff，。！？、]/.test(current.text)
+          ? combinedText
+          : `${previous.text} ${current.text}`;
+      previous.endMs = current.endMs;
+      previous.revision++;
+      previous.words = previous.words?.length
+        ? [...previous.words, ...(current.words || [])]
+        : undefined;
+    } else merged.push(current);
+  }
+  next.cues = merged;
+  next.revision++;
+  validateDocument(next);
+  return next;
+}
+
+export function applyRewrite(
+  doc: SubtitleDocument,
+  values: Record<string, string>,
+  scope: "source" | "translation",
+  language: string,
+  provider: string,
+): SubtitleDocument {
+  const next = structuredClone(doc);
+  const ids = new Set(next.cues.map((item) => item.id));
+  if (
+    Object.keys(values).length !== ids.size ||
+    Object.keys(values).some((id) => !ids.has(id))
+  )
+    throw new Error("AI 改写结果存在漏句、重复或未知字幕");
+  for (const item of next.cues) {
+    const text = values[item.id];
+    if (typeof text !== "string" || !text.trim())
+      throw new Error("AI 改写返回了空字幕");
+    if (scope === "source") {
+      if (text !== item.text) {
+        item.text = text;
+        item.revision++;
+        delete item.words;
+      }
+    } else {
+      item.translations[language] = {
+        text,
+        sourceRevision: item.revision,
+        provider,
+      };
+    }
+  }
+  next.revision++;
+  validateDocument(next);
+  return next;
+}
 export function combineTranscripts(
   parts: { offsetMs: number; transcript: Transcript }[],
   durationMs: number,

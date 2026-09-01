@@ -33,4 +33,9 @@ export const jobParamsSchema = z.object({
   glossary: z.string().max(12000).optional(),
   audioTrack: z.number().int().min(0).max(32).optional(),
   resolution: z.number().int().min(240).max(4320).optional(),
+  instruction: z.string().max(12000).optional(),
+  scope: z.enum(["source", "translation"]).optional(),
+  maxCharacters: z.number().int().min(4).max(200).optional(),
+  maxDurationMs: z.number().int().min(500).max(30000).optional(),
+  minCharacters: z.number().int().min(1).max(100).optional(),
 });

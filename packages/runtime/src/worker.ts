@@ -1,6 +1,8 @@
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  applyRewrite,
+  applySegmentationPlan,
   combineTranscripts,
   type Job,
   type SubtitleDocument,
@@ -86,45 +88,108 @@ export async function executeJob(store: Store, job: Job) {
     } else {
       const profile = store.profile(job.params.profileId || ""),
         http = new FetchTransport(profile.allowPrivateEndpoint, signal);
-      if (job.kind === "translate") {
+      if (["translate", "segment", "rewrite"].includes(job.kind)) {
         const document: SubtitleDocument = structuredClone(checkpoint.document),
           target = job.params.targetLanguage || "";
         const engine = new CloudTranslation(profile, http);
         checkpoint.batches ||= {};
+        const aiValues: Record<string, string> = {};
+        const segmentPlan: Record<string, string[]> = {};
         for (let i = 0; i < document.cues.length; i += 40) {
           const batch = document.cues.slice(i, i + 40),
             key = String(i);
-          report("翻译字幕", (i / document.cues.length) * 100);
+          report(
+            job.kind === "translate"
+              ? "翻译字幕"
+              : job.kind === "segment"
+                ? "AI 智能断句"
+                : "AI 修改字幕",
+            (i / document.cues.length) * 100,
+          );
           if (checkpoint.batches[key]?.state === "submitting")
             throw new ProviderError(
-              "上次翻译提交结果未知；请确认可能产生的重复费用后重试",
+              "上次 AI 请求结果未知；请确认可能产生的重复费用后重试",
               "UNKNOWN_SUBMISSION",
               true,
             );
           if (!checkpoint.batches[key]) {
             checkpoint.batches[key] = { state: "submitting" };
             save();
-            const translated = await engine.translate(
-              batch.map((c) => ({ id: c.id, text: c.text })),
-              document.language,
-              target,
-              document.cues
-                .slice(Math.max(0, i - 3), i + 43)
-                .map((c) => c.text)
-                .join("\n"),
-              job.params.glossary || "",
-            );
-            checkpoint.batches[key] = { state: "complete", translated };
+            let result: Record<string, string | string[]>;
+            if (job.kind === "translate")
+              result = await engine.translate(
+                batch.map((c) => ({ id: c.id, text: c.text })),
+                document.language,
+                target,
+                document.cues
+                  .slice(Math.max(0, i - 3), i + 43)
+                  .map((c) => c.text)
+                  .join("\n"),
+                job.params.glossary || "",
+              );
+            else if (job.kind === "segment")
+              result = await engine.segment(
+                batch.map((c) => ({
+                  id: c.id,
+                  text: c.text,
+                  durationMs: c.endMs - c.startMs,
+                })),
+                document.language,
+                job.params.maxCharacters || 24,
+                job.params.maxDurationMs || 5000,
+                job.params.instruction || "",
+              );
+            else {
+              const scope = job.params.scope || "source";
+              result = await engine.rewrite(
+                batch.map((c) => {
+                  const text =
+                    scope === "translation"
+                      ? c.translations[target]?.text
+                      : c.text;
+                  if (!text)
+                    throw new ProviderError("存在缺失译文，无法执行 AI 修改");
+                  return { id: c.id, text };
+                }),
+                scope === "translation" ? target : document.language,
+                job.params.instruction || "",
+              );
+            }
+            checkpoint.batches[key] = { state: "complete", result };
             save();
           }
-          for (const c of batch)
-            c.translations[target] = {
-              text: checkpoint.batches[key].translated[c.id],
-              sourceRevision: c.revision,
-              provider: profile.provider,
-            };
+          const result =
+            checkpoint.batches[key].result ||
+            checkpoint.batches[key].translated;
+          if (job.kind === "translate")
+            for (const c of batch)
+              c.translations[target] = {
+                text: result[c.id],
+                sourceRevision: c.revision,
+                provider: profile.provider,
+              };
+          else if (job.kind === "segment") Object.assign(segmentPlan, result);
+          else Object.assign(aiValues, result);
         }
-        applyResult(document);
+        if (job.kind === "translate") applyResult(document);
+        else if (job.kind === "segment")
+          applyResult(
+            applySegmentationPlan(document, segmentPlan, {
+              maxCharacters: job.params.maxCharacters || 24,
+              maxDurationMs: job.params.maxDurationMs || 5000,
+              minCharacters: job.params.minCharacters,
+            }),
+          );
+        else
+          applyResult(
+            applyRewrite(
+              document,
+              aiValues,
+              job.params.scope || "source",
+              target,
+              `ai:${profile.provider}`,
+            ),
+          );
       } else {
         if (!project.media?.audioTracks.length)
           throw new Error("视频没有音轨；可导入字幕直接烧录");

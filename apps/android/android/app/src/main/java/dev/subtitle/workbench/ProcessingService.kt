@@ -178,11 +178,16 @@ class ProcessingService : Service() {
                     require(output.renameTo(File(folder, "video.mp4"))) { "无法保存视频" }
                     store.update("job", id) { it.put("outputName", "video.mp4") }
                 }
-                "translate" -> {
+                "translate",
+                "segment",
+                "rewrite" -> {
+                    val kind = job.s("kind")
                     val profile = store.get("profile", params.s("profileId"))
                     val translator = NativeTranslation(profile)
                     val doc = cp.o("document").copy()
                     val target = params.s("targetLanguage")
+                    val segmentPlan = obj()
+                    val rewriteValues = obj()
                     val batches = cp.o("batches")
                     cp.put("batches", batches)
                     val groups = doc.a("cues").objects().chunked(40)
@@ -204,37 +209,123 @@ class ProcessingService : Service() {
                                     )
                                     .joinToString("\n") { it.s("text") }
                             val result =
-                                translator.translate(
-                                    group,
-                                    doc.s("language", "auto"),
-                                    target,
-                                    context,
-                                    params.s("glossary"),
-                                )
+                                when (kind) {
+                                    "translate" ->
+                                        translator.translate(
+                                            group,
+                                            doc.s("language", "auto"),
+                                            target,
+                                            context,
+                                            params.s("glossary"),
+                                        )
+                                    "segment" ->
+                                        translator.segment(
+                                            group.map {
+                                                it.copy()
+                                                    .put(
+                                                        "durationMs",
+                                                        it.getLong("endMs") -
+                                                            it.getLong("startMs"),
+                                                    )
+                                            },
+                                            doc.s("language", "auto"),
+                                            params.optInt("maxCharacters", 24),
+                                            params.optLong("maxDurationMs", 5000),
+                                            params.s("instruction"),
+                                        )
+                                    else -> {
+                                        val scope = params.s("scope", "source")
+                                        translator.rewrite(
+                                            group.map {
+                                                val text =
+                                                    if (scope == "translation")
+                                                        it.o("translations").o(target).s("text")
+                                                    else it.s("text")
+                                                require(text.isNotBlank()) {
+                                                    "存在缺失译文，无法执行 AI 修改"
+                                                }
+                                                obj("id" to it.s("id"), "text" to text)
+                                            },
+                                            if (scope == "translation") target
+                                            else doc.s("language", "auto"),
+                                            params.s("instruction"),
+                                        )
+                                    }
+                                }
                             batch.put("state", "complete").put("result", result)
                             save()
                         }
-                        group.forEach { c ->
-                            c.o("translations")
-                                .put(
-                                    target,
-                                    obj(
-                                        "text" to batch.o("result").getString(c.s("id")),
-                                        "sourceRevision" to c.optInt("revision"),
-                                        "provider" to profile.s("provider"),
+                        when (kind) {
+                            "translate" ->
+                                group.forEach { c ->
+                                    c.o("translations")
+                                        .put(
+                                            target,
+                                            obj(
+                                                "text" to
+                                                    batch.o("result").getString(c.s("id")),
+                                                "sourceRevision" to c.optInt("revision"),
+                                                "provider" to profile.s("provider"),
+                                            ),
+                                        )
+                                }
+                            "segment" ->
+                                batch.o("result").keys().forEach {
+                                    segmentPlan.put(it, batch.o("result").get(it))
+                                }
+                            else ->
+                                batch.o("result").keys().forEach {
+                                    rewriteValues.put(it, batch.o("result").get(it))
+                                }
+                        }
+                        stage(
+                            when (kind) {
+                                "translate" -> "翻译字幕"
+                                "segment" -> "AI 智能断句"
+                                else -> "AI 修改字幕"
+                            },
+                            (index + 1) * 95 / groups.size,
+                        )
+                    }
+                    apply(
+                        when (kind) {
+                            "translate" -> doc
+                            "segment" ->
+                                Subtitles.segment(
+                                    doc,
+                                    segmentPlan,
+                                    params.optInt("maxCharacters", 24),
+                                    params.optLong("maxDurationMs", 5000),
+                                    params.optInt(
+                                        "minCharacters",
+                                        minOf(8, params.optInt("maxCharacters", 24)),
                                     ),
                                 )
+                            else ->
+                                Subtitles.rewrite(
+                                    doc,
+                                    rewriteValues,
+                                    params.s("scope", "source"),
+                                    target,
+                                    "ai:${profile.s("provider")}",
+                                )
                         }
-                        stage("翻译字幕", (index + 1) * 95 / groups.size)
-                    }
-                    apply(doc)
+                    )
                 }
                 "transcribe" -> {
                     val profile = store.get("profile", params.s("profileId"))
                     val provider = profile.s("provider")
                     val needs =
                         provider in
-                            listOf("aliyun", "volcengine", "baidu", "huawei", "google", "aws") ||
+                            listOf(
+                                "aliyun",
+                                "volcengine",
+                                "baidu",
+                                "huawei",
+                                "google",
+                                "aws",
+                                "soniox",
+                            ) ||
                             provider == "azure" && profile.s("model") == "batch"
                     val storage =
                         if (needs) {

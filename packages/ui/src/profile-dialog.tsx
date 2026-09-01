@@ -4,6 +4,7 @@ import {
   Alert,
   AutoComplete,
   Checkbox,
+  Divider,
   Form,
   Input,
   Modal,
@@ -18,37 +19,49 @@ import { errorText, type Command } from "./shared";
 
 export function ProfileDialog({
   profile,
+  category,
   close,
   command,
 }: {
   profile?: PublicProfile;
+  category: "asr" | "translation" | "storage";
   close: () => void;
   command: Command;
 }) {
   const [form] = Form.useForm();
-  const [provider, setProvider] = useState(profile?.provider || "openai");
+  const initialProvider =
+    profile?.provider || catalog.find((item) => item.category === category)!.id;
+  const [provider, setProvider] = useState(initialProvider);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const definition = catalog.find((p) => p.id === provider)!;
+  const selectedModel = Form.useWatch("model", form) || definition.models[0];
+  const selectedDetail = definition.modelDetails?.find(
+    (item) => item.id === selectedModel,
+  );
   return (
     <Modal
       open
-      title={profile ? "编辑配置" : "添加模型或存储"}
-      width={600}
+      title={
+        profile
+          ? "编辑配置"
+          : `添加${category === "asr" ? "语音识别" : category === "translation" ? "翻译 / AI" : "临时存储"}配置`
+      }
+      width={680}
       onCancel={() => !saving && close()}
       onOk={() => form.submit()}
       confirmLoading={saving}
       okText="保存配置"
       cancelButtonProps={{ disabled: saving }}
-      maskClosable={!saving}
+      mask={{ closable: !saving }}
     >
       <Form
         form={form}
         layout="vertical"
         initialValues={{
           name: profile?.name,
-          provider,
-          model: profile?.model || "whisper-1",
+          provider: initialProvider,
+          model: profile?.model || definition.models[0] || "",
           options: profile?.options || {},
           secrets: {},
           allowPrivateEndpoint: profile?.allowPrivateEndpoint || false,
@@ -91,23 +104,15 @@ export function ProfileDialog({
         >
           <Input placeholder="例如：我的中文识别" />
         </Form.Item>
+        <Divider titlePlacement="start">服务与模型</Divider>
         <Form.Item name="provider" label="服务商" rules={[{ required: true }]}>
           <Select
             showSearch
             optionFilterProp="label"
             disabled={!!profile}
-            options={(
-              [
-                ["asr", "语音识别"],
-                ["translation", "字幕翻译"],
-                ["storage", "音频临时存储"],
-              ] as const
-            ).map(([category, label]) => ({
-              label,
-              options: catalog
-                .filter((p) => p.category === category)
-                .map((p) => ({ value: p.id, label: p.name })),
-            }))}
+            options={catalog
+              .filter((p) => p.category === category)
+              .map((p) => ({ value: p.id, label: p.name }))}
             onChange={(value) => {
               form.resetFields(["model", "options", "secrets"]);
               form.setFieldsValue({
@@ -129,7 +134,13 @@ export function ProfileDialog({
           ]}
         >
           <AutoComplete
-            options={definition.models.map((model) => ({ value: model }))}
+            options={(
+              definition.modelDetails ||
+              definition.models.map((id) => ({ id, label: id }))
+            ).map((model) => ({
+              value: model.id,
+              label: model.label || model.id,
+            }))}
             placeholder="选择或输入模型名称"
             filterOption={(input, option) =>
               !!option?.value.toLowerCase().includes(input.toLowerCase())
@@ -137,48 +148,97 @@ export function ProfileDialog({
           />
         </Form.Item>
         <Space wrap className="wb-gap">
+          {selectedDetail?.status && (
+            <Tag
+              color={
+                selectedDetail.status === "recommended" ? "green" : undefined
+              }
+            >
+              {selectedDetail.status === "recommended"
+                ? "推荐模型"
+                : selectedDetail.status === "legacy"
+                  ? "兼容旧模型"
+                  : "当前模型"}
+            </Tag>
+          )}
           {definition.input && <Tag>输入：{definition.input}</Tag>}
           {definition.timestamps && <Tag>时间戳：{definition.timestamps}</Tag>}
           {definition.maxChunkSeconds && (
             <Tag>分片上限：{definition.maxChunkSeconds} 秒</Tag>
           )}
+          {definition.speakerDiarization && <Tag>说话人分离</Tag>}
+          {definition.aiOperations && <Tag color="blue">AI 断句 / 改写</Tag>}
+          {definition.checkedAt && <Tag>资料核对：{definition.checkedAt}</Tag>}
         </Space>
-        {definition.fields.map((field) => (
-          <Form.Item
-            key={`${provider}:${field.key}`}
-            preserve={false}
-            name={[field.secret ? "secrets" : "options", field.key]}
-            label={field.label}
-            extra={
-              field.secret && profile?.secretFields.includes(field.key)
-                ? "已加密保存，留空保持不变"
-                : undefined
-            }
-            rules={[
-              {
-                required:
-                  !field.optional &&
-                  !(field.secret && profile?.secretFields.includes(field.key)),
-                whitespace: true,
-              },
-            ]}
-          >
-            {field.key === "serviceAccount" ? (
-              <Input.TextArea
-                rows={4}
-                autoComplete="off"
-                placeholder="粘贴 Service Account JSON"
-              />
-            ) : field.secret ? (
-              <Input.Password
-                autoComplete="new-password"
-                placeholder={field.placeholder}
-              />
-            ) : (
-              <Input placeholder={field.placeholder} />
-            )}
-          </Form.Item>
-        ))}
+        {selectedDetail?.note && (
+          <Typography.Paragraph type="secondary" className="wb-gap">
+            {selectedDetail.note}
+          </Typography.Paragraph>
+        )}
+        {(
+          [
+            ["credentials", "凭据"],
+            ["endpoint", "区域与服务地址"],
+            ["advanced", "高级选项"],
+          ] as const
+        ).map(([section, title]) => {
+          const fields = definition.fields.filter(
+            (field) =>
+              (field.section || (field.secret ? "credentials" : "advanced")) ===
+              section,
+          );
+          if (!fields.length) return null;
+          return (
+            <React.Fragment key={section}>
+              <Divider titlePlacement="start">{title}</Divider>
+              <div
+                className={
+                  section === "credentials" ? "wb-form-grid" : undefined
+                }
+              >
+                {fields.map((field) => (
+                  <Form.Item
+                    key={`${provider}:${field.key}`}
+                    preserve={false}
+                    name={[field.secret ? "secrets" : "options", field.key]}
+                    label={field.label}
+                    extra={
+                      field.secret && profile?.secretFields.includes(field.key)
+                        ? "已加密保存，留空保持不变"
+                        : undefined
+                    }
+                    rules={[
+                      {
+                        required:
+                          !field.optional &&
+                          !(
+                            field.secret &&
+                            profile?.secretFields.includes(field.key)
+                          ),
+                        whitespace: true,
+                      },
+                    ]}
+                  >
+                    {field.key === "serviceAccount" ? (
+                      <Input.TextArea
+                        rows={4}
+                        autoComplete="off"
+                        placeholder="粘贴 Service Account JSON"
+                      />
+                    ) : field.secret ? (
+                      <Input.Password
+                        autoComplete="new-password"
+                        placeholder={field.placeholder}
+                      />
+                    ) : (
+                      <Input placeholder={field.placeholder} />
+                    )}
+                  </Form.Item>
+                ))}
+              </div>
+            </React.Fragment>
+          );
+        })}
         {definition.note && (
           <Alert
             className="wb-gap"
@@ -193,7 +253,7 @@ export function ProfileDialog({
           </Checkbox>
         </Form.Item>
         <Typography.Text type="secondary">
-          保存配置不代表真实账号联调通过。
+          保存后请在配置列表点击“测试服务”；测试会发起小型真实请求。
         </Typography.Text>{" "}
         {definition.docs && (
           <Typography.Link

@@ -36,6 +36,7 @@ import {
   EditOutlined,
   ScissorOutlined,
   SearchOutlined,
+  RobotOutlined,
   UploadOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
@@ -206,6 +207,12 @@ export function Editor({
   const [source, setSource] = useState(project.document.language || "auto");
   const [asr, setAsr] = useState<string>();
   const [translator, setTranslator] = useState<string>();
+  const [aiProfile, setAiProfile] = useState<string>();
+  const [segmentInstruction, setSegmentInstruction] = useState("");
+  const [rewriteInstruction, setRewriteInstruction] = useState("");
+  const [aiScope, setAiScope] = useState<"source" | "translation">("source");
+  const [maxCharacters, setMaxCharacters] = useState(24);
+  const [maxDurationMs, setMaxDurationMs] = useState(5000);
   const [storage, setStorage] = useState<string>();
   const [track, setTrack] = useState(0);
   const [resolution, setResolution] = useState<number | undefined>(
@@ -245,11 +252,15 @@ export function Editor({
       mounted = false;
     };
   }, [gateway]);
-  const choices = (category: string) =>
+  const choices = (category: string, aiOnly = false) =>
     profiles
-      .filter(
-        (p) => catalog.find((d) => d.id === p.provider)?.category === category,
-      )
+      .filter((p) => {
+        const definition = catalog.find((d) => d.id === p.provider);
+        return (
+          definition?.category === category &&
+          (!aiOnly || definition.aiOperations)
+        );
+      })
       .map((p) => ({ value: p.id, label: p.name }));
   const activeCue = project.document.cues.find(
     (c) => c.startMs <= time && c.endMs > time,
@@ -281,7 +292,9 @@ export function Editor({
           ? asr
           : kind === "translate"
             ? translator
-            : undefined,
+            : kind === "segment" || kind === "rewrite"
+              ? aiProfile
+              : undefined,
       storageId: storage,
       language: source,
       targetLanguage: target,
@@ -289,6 +302,16 @@ export function Editor({
       glossary,
       audioTrack: track,
       resolution,
+      instruction:
+        kind === "segment"
+          ? segmentInstruction
+          : kind === "rewrite"
+            ? rewriteInstruction
+            : undefined,
+      scope: aiScope,
+      maxCharacters,
+      maxDurationMs,
+      minCharacters: Math.min(8, Math.max(2, Math.floor(maxCharacters / 3))),
     };
     try {
       await editCommand("job.create", { id: project.id, kind, params });
@@ -316,6 +339,7 @@ export function Editor({
     category: string,
     value: string | undefined,
     onChange: (value: string | undefined) => void,
+    aiOnly = false,
   ) => (
     <Form.Item label={label}>
       <Select
@@ -324,7 +348,7 @@ export function Editor({
         placeholder="选择配置"
         value={value}
         onChange={onChange}
-        options={choices(category)}
+        options={choices(category, aiOnly)}
         notFoundContent="请先在模型与存储中添加配置"
       />
     </Form.Item>
@@ -781,6 +805,126 @@ export function Editor({
                     <Typography.Paragraph type="secondary">
                       只读取当前字幕与样式，不会重新调用识别或翻译服务。
                     </Typography.Paragraph>
+                  </Form>
+                ),
+              },
+              {
+                key: "ai",
+                label: (
+                  <Space size={4}>
+                    <RobotOutlined /> AI 优化
+                  </Space>
+                ),
+                children: (
+                  <Form layout="vertical">
+                    <Alert
+                      className="wb-gap"
+                      type="info"
+                      showIcon
+                      title="AI 只决定文字修改或语义断句；时间轴由本地程序校验和计算。"
+                    />
+                    {selection(
+                      "AI 模型配置",
+                      "translation",
+                      aiProfile,
+                      setAiProfile,
+                      true,
+                    )}
+                    <Typography.Title level={5}>智能断句</Typography.Title>
+                    <div className="wb-form-grid">
+                      <Form.Item label="每条目标最大字符">
+                        <InputNumber
+                          className="wb-full"
+                          min={4}
+                          max={200}
+                          value={maxCharacters}
+                          onChange={(value) => value && setMaxCharacters(value)}
+                        />
+                      </Form.Item>
+                      <Form.Item label="每条目标最长秒数">
+                        <InputNumber
+                          className="wb-full"
+                          min={0.5}
+                          max={30}
+                          step={0.5}
+                          value={maxDurationMs / 1000}
+                          onChange={(value) =>
+                            value && setMaxDurationMs(Math.round(value * 1000))
+                          }
+                        />
+                      </Form.Item>
+                    </div>
+                    <Form.Item label="断句偏好（可选）">
+                      <Input.TextArea
+                        rows={2}
+                        maxLength={12000}
+                        value={segmentInstruction}
+                        onChange={(event) =>
+                          setSegmentInstruction(event.target.value)
+                        }
+                        placeholder="例如：中文按完整意群切分，避免把人名和专有名词拆开"
+                      />
+                    </Form.Item>
+                    <Button
+                      block
+                      disabled={
+                        !aiProfile || busy || !project.document.cues.length
+                      }
+                      onMouseDown={keepDraftFocus}
+                      onClick={() => job("segment")}
+                    >
+                      AI 智能调整字幕长度
+                    </Button>
+                    <Typography.Paragraph type="secondary">
+                      原文字词必须完整保留。拆分后相关译文会失效，需要重新翻译。
+                    </Typography.Paragraph>
+                    <Typography.Title level={5}>
+                      按指令修改字幕
+                    </Typography.Title>
+                    <Form.Item label="修改对象">
+                      <Segmented
+                        block
+                        value={aiScope}
+                        onChange={(value) =>
+                          setAiScope(value as "source" | "translation")
+                        }
+                        options={[
+                          { value: "source", label: "原文" },
+                          { value: "translation", label: `译文（${target}）` },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item label="修改要求" required>
+                      <Input.TextArea
+                        rows={4}
+                        maxLength={12000}
+                        value={rewriteInstruction}
+                        onChange={(event) =>
+                          setRewriteInstruction(event.target.value)
+                        }
+                        placeholder="例如：修正错别字和明显识别错误，保留口语语气，不要增删事实"
+                      />
+                    </Form.Item>
+                    <Button
+                      block
+                      type="primary"
+                      disabled={
+                        !aiProfile ||
+                        !rewriteInstruction.trim() ||
+                        busy ||
+                        !project.document.cues.length ||
+                        (aiScope === "translation" && missingTranslations > 0)
+                      }
+                      onMouseDown={keepDraftFocus}
+                      onClick={() => job("rewrite")}
+                    >
+                      按指令修改全部字幕
+                    </Button>
+                    {aiScope === "translation" && missingTranslations > 0 && (
+                      <Typography.Text type="danger">
+                        当前语言有 {missingTranslations} 条缺失或过期译文。
+                      </Typography.Text>
+                    )}
                   </Form>
                 ),
               },

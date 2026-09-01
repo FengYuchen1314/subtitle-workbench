@@ -135,7 +135,12 @@ class NativeAsr(private val p: JSONObject) {
             "custom-json" -> {
                 require(
                     provider != "openai" ||
-                        model in listOf("whisper-1", "gpt-4o-transcribe-diarize")
+                        model in
+                            listOf(
+                                "whisper-1",
+                                "gpt-transcribe",
+                                "gpt-4o-transcribe-diarize",
+                            )
                 ) {
                     "此模型不提供字幕所需时间戳"
                 }
@@ -160,6 +165,110 @@ class NativeAsr(private val p: JSONObject) {
                     )
                 )
             }
+            "mistral" ->
+                complete(
+                    http.multipart(
+                        base("https://api.mistral.ai/v1") + "/audio/transcriptions",
+                        file,
+                        "file",
+                        mapOf(
+                            "model" to model,
+                            "timestamp_granularities" to "word",
+                            "diarize" to "true",
+                        ) + lang,
+                        bearer(),
+                    )
+                )
+            "xai" ->
+                complete(
+                    http.multipart(
+                        base("https://api.x.ai/v1") + "/stt",
+                        file,
+                        "file",
+                        mapOf("format" to "true", "diarize" to "true") + lang,
+                        bearer(),
+                        fileLast = true,
+                    )
+                )
+            "cloudflare" ->
+                complete(
+                    http.json(
+                        base("https://api.cloudflare.com/client/v4") +
+                            "/accounts/${enc(o.s("accountId"))}/ai/run/$model",
+                        obj(
+                            "audio" to b64(file.readBytes()),
+                            "task" to "transcribe",
+                            "vad_filter" to true,
+                        ).also {
+                            if (language != "auto") it.put("language", language)
+                        },
+                        bearer(),
+                    )
+                )
+            "soniox" -> {
+                val data =
+                    obj(
+                        "model" to model,
+                        "audio_url" to url(),
+                        "enable_speaker_diarization" to true,
+                        "enable_language_identification" to (language == "auto"),
+                        "client_reference_id" to id,
+                    )
+                if (language != "auto") data.put("language_hints", arr(listOf(language)))
+                pending(
+                    http
+                        .json(
+                            base("https://api.soniox.com/v1") + "/transcriptions",
+                            data,
+                            bearer(),
+                        )
+                        .s("id")
+                )
+            }
+            "gladia" -> {
+                val root = base("https://api.gladia.io/v2")
+                val headers = mapOf("x-gladia-key" to s.s("apiKey"))
+                val upload = http.multipart("$root/upload", file, "audio", emptyMap(), headers)
+                val languageConfig =
+                    obj(
+                        "languages" to
+                            arr(if (language == "auto") emptyList<String>() else listOf(language)),
+                        "code_switching" to (language == "auto" && model != "solaria-3"),
+                    )
+                pending(
+                    http
+                        .json(
+                            "$root/pre-recorded",
+                            obj(
+                                "audio_url" to upload.s("audio_url"),
+                                "model" to model,
+                                "diarization" to true,
+                                "sentences" to true,
+                                "language_config" to languageConfig,
+                            ),
+                            headers,
+                        )
+                        .s("id")
+                )
+            }
+            "revai" ->
+                pending(
+                    http
+                        .multipart(
+                            base("https://api.rev.ai/speechtotext/v1") + "/jobs",
+                            file,
+                            "media",
+                            mapOf(
+                                "options" to
+                                    obj("metadata" to id).also {
+                                            if (language != "auto") it.put("language", language)
+                                        }
+                                        .toString()
+                            ),
+                            bearer(),
+                        )
+                        .s("id")
+                )
             "aliyun" -> {
                 val qwen = model.startsWith("qwen")
                 val parameters =
@@ -629,6 +738,43 @@ class NativeAsr(private val p: JSONObject) {
                         http.json("$root/jobs/$id/transcript?format=json-v2", headers = bearer())
                     )
                 else waiting()
+            }
+            "soniox" -> {
+                val root = base("https://api.soniox.com/v1")
+                val r = http.json("$root/transcriptions/${enc(id)}", headers = bearer())
+                require(r.s("status") != "error") {
+                    r.s("error_message", "Soniox 转写失败")
+                }
+                if (r.s("status") != "completed") waiting()
+                else complete(http.json("$root/transcriptions/${enc(id)}/transcript", headers = bearer()))
+            }
+            "gladia" -> {
+                val r =
+                    http.json(
+                        base("https://api.gladia.io/v2") + "/pre-recorded/${enc(id)}",
+                        headers = mapOf("x-gladia-key" to s.s("apiKey")),
+                    )
+                require(r.s("status") != "error") {
+                    r.s("error_message", r.s("error_code", "Gladia 转写失败"))
+                }
+                if (r.s("status") == "done") complete(r) else waiting()
+            }
+            "revai" -> {
+                val root = base("https://api.rev.ai/speechtotext/v1")
+                val r = http.json("$root/jobs/${enc(id)}", headers = bearer())
+                require(r.s("status") != "failed") {
+                    r.s("failure_detail", "Rev AI 转写失败")
+                }
+                if (r.s("status") != "transcribed") waiting()
+                else
+                    complete(
+                        http.json(
+                            "$root/jobs/${enc(id)}/transcript",
+                            headers =
+                                bearer() +
+                                    mapOf("Accept" to "application/vnd.rev.transcript.v1.0+json"),
+                        )
+                    )
             }
             else -> error("同步接口无远端任务")
         }

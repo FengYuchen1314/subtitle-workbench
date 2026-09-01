@@ -97,6 +97,40 @@ const responses = (id: string): any[] =>
         { job: { status: "done" } },
         fixtures.speechmatics,
       ],
+      mistral: [{ words: [{ word: "hello", start: 1, end: 2 }] }],
+      xai: [{ words: [{ text: "hello", start: 1, end: 2 }] }],
+      soniox: [
+        { id: "remote" },
+        { status: "completed" },
+        { tokens: [{ text: "hello", start_ms: 1000, end_ms: 2000 }] },
+      ],
+      gladia: [
+        { audio_url: "https://upload.example.test/audio" },
+        { id: "remote" },
+        {
+          status: "done",
+          result: {
+            transcription: {
+              utterances: [{ text: "hello", start: 1, end: 2 }],
+            },
+          },
+        },
+      ],
+      revai: [
+        { id: "remote" },
+        { status: "transcribed" },
+        {
+          monologues: [
+            {
+              speaker: 1,
+              elements: [{ type: "text", value: "hello", ts: 1, end_ts: 2 }],
+            },
+          ],
+        },
+      ],
+      cloudflare: [
+        { result: { segments: [{ text: "hello", start: 1, end: 2 }] } },
+      ],
     }) as Record<string, any[]>
   )[id];
 for (const def of catalog.filter(
@@ -116,6 +150,7 @@ for (const def of catalog.filter(
           region: "us",
           projectId: "project",
           appId: "fixture-app",
+          accountId: "fixture-account",
           ...(def.id === "ibm"
             ? { endpoint: "https://watson.example.test/speech" }
             : {}),

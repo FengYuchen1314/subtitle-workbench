@@ -61,11 +61,14 @@ function fromWords(items: any[], mapper: (item: any) => Word | null): Cue[] {
   return cues;
 }
 export function normalize(provider: string, raw: any): Transcript {
+  if (provider === "cloudflare") raw = raw.result || raw;
   let cues: (Cue | null)[] = [];
   let language = raw.language || raw.language_code || "auto";
   switch (provider) {
     case "openai":
     case "groq":
+    case "mistral":
+    case "xai":
     case "custom-openai":
       if (raw.segments?.length)
         cues = raw.segments.map((s: any) =>
@@ -77,6 +80,76 @@ export function normalize(provider: string, raw: any): Transcript {
           startMs: number(w.start) * 1000,
           endMs: number(w.end) * 1000,
         }));
+      break;
+    case "cloudflare":
+      raw = raw.transcription_info || raw;
+      if (raw.segments?.length)
+        cues = raw.segments.map((s: any) =>
+          timed(s.text, s.start, s.end, 1000, s.speaker),
+        );
+      else if (raw.words?.length)
+        cues = fromWords(raw.words, (w: any) => ({
+          text: w.word || w.text,
+          startMs: number(w.start) * 1000,
+          endMs: number(w.end) * 1000,
+        }));
+      else if (typeof raw.vtt === "string") {
+        const blocks = raw.vtt.replace(/\r/g, "").split(/\n\s*\n/);
+        cues = blocks.flatMap((block: string) => {
+          const lines = block.split("\n"),
+            time = lines.findIndex((line: string) => line.includes("-->"));
+          if (time < 0) return [];
+          const match = lines[time].match(/([\d:.,]+)\s+-->\s+([\d:.,]+)/);
+          const parse = (value: string) => {
+            const parts = value.replace(",", ".").split(":").map(Number);
+            const seconds =
+              parts.length === 3
+                ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+                : parts[0] * 60 + parts[1];
+            return seconds * 1000;
+          };
+          return match
+            ? [
+                timed(
+                  lines.slice(time + 1).join("\n"),
+                  parse(match[1]),
+                  parse(match[2]),
+                ),
+              ]
+            : [];
+        });
+      }
+      break;
+    case "soniox":
+      cues = fromWords(raw.tokens || [], (w: any) => ({
+        text: w.text,
+        startMs: number(w.start_ms),
+        endMs: number(w.end_ms),
+        speaker: w.speaker?.toString(),
+      }));
+      break;
+    case "gladia": {
+      const transcript = raw.result?.transcription || raw.transcription || {};
+      language = transcript.languages?.[0] || language;
+      cues = (transcript.utterances || []).map((item: any) =>
+        timed(item.text, item.start, item.end, 1000, item.speaker?.toString()),
+      );
+      break;
+    }
+    case "revai":
+      cues = fromWords(
+        (raw.monologues || []).flatMap((monologue: any) =>
+          (monologue.elements || [])
+            .filter((item: any) => item.type === "text")
+            .map((item: any) => ({ ...item, speaker: monologue.speaker })),
+        ),
+        (w: any) => ({
+          text: w.value,
+          startMs: number(w.ts) * 1000,
+          endMs: number(w.end_ts) * 1000,
+          speaker: w.speaker?.toString(),
+        }),
+      );
       break;
     case "custom-json":
       cues = (raw.cues || []).map((s: any) =>

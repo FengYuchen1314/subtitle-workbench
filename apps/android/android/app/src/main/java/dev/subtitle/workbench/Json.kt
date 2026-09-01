@@ -51,6 +51,10 @@ fun defaultStyle() =
     )
 
 object Subtitles {
+    private fun comparable(value: String) =
+        java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC)
+            .replace(Regex("[\\s\\u200b]+"), "")
+
     fun combine(parts: List<Pair<Long, JSONObject>>, durationMs: Long): JSONObject {
         val output = mutableListOf<JSONObject>()
         parts.forEach { (offset, transcript) ->
@@ -96,6 +100,123 @@ object Subtitles {
             }
             require(it.s("text").isNotBlank() && it.s("text").length <= 20000) { "字幕文字为空或过长" }
         }
+    }
+
+    fun segment(
+        document: JSONObject,
+        plan: JSONObject,
+        maxCharacters: Int,
+        maxDurationMs: Long,
+        minCharacters: Int,
+    ): JSONObject {
+        val doc = document.copy()
+        val originals = doc.a("cues").objects()
+        require(plan.keys().asSequence().all { id -> originals.any { it.s("id") == id } }) {
+            "AI 断句返回了未知字幕 ID"
+        }
+        val output = mutableListOf<JSONObject>()
+        originals.forEach { original ->
+            val parts = plan.a(original.s("id")).values().map { it.toString() }
+            require(
+                parts.isNotEmpty() &&
+                    parts.all { it.isNotBlank() } &&
+                    comparable(parts.joinToString("")) == comparable(original.s("text"))
+            ) {
+                "AI 断句未完整保留字幕：${original.s("id")}"
+            }
+            val duration = original.getLong("endMs") - original.getLong("startMs")
+            require(duration >= parts.size) { "字幕时长太短，无法应用 AI 分段" }
+            val weights = parts.map { it.codePointCount(0, it.length).coerceAtLeast(1) }
+            val total = weights.sum().toLong()
+            var used = 0L
+            parts.forEachIndexed { index, text ->
+                val start =
+                    if (index == 0) original.getLong("startMs")
+                    else original.getLong("startMs") + duration * used / total
+                used += weights[index]
+                val end =
+                    if (index == parts.lastIndex) original.getLong("endMs")
+                    else original.getLong("startMs") + duration * used / total
+                output.add(
+                    cue(text.trim(), start, end)
+                        .put(
+                            "id",
+                            if (index == 0) original.s("id") else uuid(),
+                        )
+                        .put("revision", original.optInt("revision") + 1)
+                        .also {
+                            if (original.s("speaker").isNotEmpty())
+                                it.put("speaker", original.s("speaker"))
+                        }
+                )
+            }
+        }
+        val merged = mutableListOf<JSONObject>()
+        output.forEach { current ->
+            val previous = merged.lastOrNull()
+            val combined = if (previous == null) "" else previous.s("text") + current.s("text")
+            val canMerge =
+                previous != null &&
+                    previous.s("speaker") == current.s("speaker") &&
+                    current.getLong("startMs") - previous.getLong("endMs") <= 350 &&
+                    current.getLong("endMs") - previous.getLong("startMs") <= maxDurationMs &&
+                    combined.codePointCount(0, combined.length) <= maxCharacters &&
+                    (previous.s("text").codePointCount(0, previous.s("text").length) <
+                        minCharacters ||
+                        current.s("text").codePointCount(0, current.s("text").length) <
+                            minCharacters)
+            if (canMerge) {
+                val target = requireNotNull(previous)
+                val join =
+                    if (
+                        Regex("[\\u3400-\\u9fff]$").containsMatchIn(target.s("text")) ||
+                            Regex("^[\\u3400-\\u9fff，。！？、]").containsMatchIn(current.s("text"))
+                    )
+                        combined
+                    else target.s("text") + " " + current.s("text")
+                target.put("text", join)
+                    .put("endMs", current.getLong("endMs"))
+                    .put("revision", target.optInt("revision") + 1)
+            } else merged.add(current)
+        }
+        return doc
+            .put("cues", arr(merged))
+            .put("revision", doc.optInt("revision") + 1)
+            .also(::validate)
+    }
+
+    fun rewrite(
+        document: JSONObject,
+        values: JSONObject,
+        scope: String,
+        language: String,
+        provider: String,
+    ): JSONObject {
+        val doc = document.copy()
+        val cues = doc.a("cues").objects()
+        val ids = cues.map { it.s("id") }.toSet()
+        require(values.keys().asSequence().toSet() == ids) {
+            "AI 改写结果存在漏句、重复或未知字幕"
+        }
+        cues.forEach { item ->
+            val text = values.s(item.s("id"))
+            require(text.isNotBlank()) { "AI 改写返回了空字幕" }
+            if (scope == "translation")
+                item.o("translations")
+                    .put(
+                        language,
+                        obj(
+                            "text" to text,
+                            "sourceRevision" to item.optInt("revision"),
+                            "provider" to provider,
+                        ),
+                    )
+            else if (text != item.s("text")) {
+                item.put("text", text).put("revision", item.optInt("revision") + 1)
+                item.remove("words")
+            }
+        }
+        return doc.put("revision", doc.optInt("revision") + 1).also(::validate)
     }
 
     private fun ms(value: String): Long {

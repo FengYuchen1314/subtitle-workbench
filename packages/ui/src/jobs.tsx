@@ -24,6 +24,8 @@ const status: Record<JobStatus, [string, string]> = {
 const kinds = {
   transcribe: "生成原文字幕",
   translate: "翻译字幕",
+  segment: "AI 智能断句",
+  rewrite: "AI 指令修改",
   render: "烧录字幕视频",
 };
 export function Jobs({

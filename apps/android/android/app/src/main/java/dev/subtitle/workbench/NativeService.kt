@@ -12,6 +12,36 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
     private fun definition(id: String) =
         catalog().objects().firstOrNull { it.s("id") == id } ?: error("供应商不存在")
 
+    private fun testWav(file: File) {
+        val rate = 16000
+        val samples = (rate * 0.8).toInt()
+        val data = ByteArray(44 + samples * 2)
+        fun text(offset: Int, value: String) =
+            value.toByteArray(Charsets.US_ASCII).copyInto(data, offset)
+        fun le(offset: Int, value: Int, bytes: Int) {
+            repeat(bytes) { data[offset + it] = (value ushr (it * 8)).toByte() }
+        }
+        text(0, "RIFF")
+        le(4, data.size - 8, 4)
+        text(8, "WAVEfmt ")
+        le(16, 16, 4)
+        le(20, 1, 2)
+        le(22, 1, 2)
+        le(24, rate, 4)
+        le(28, rate * 2, 4)
+        le(32, 2, 2)
+        le(34, 16, 2)
+        text(36, "data")
+        le(40, samples * 2, 4)
+        repeat(samples) { index ->
+            val sample =
+                (kotlin.math.sin(2.0 * Math.PI * 440.0 * index / rate) * 1200).toInt()
+            le(44 + index * 2, sample, 2)
+        }
+        file.parentFile?.mkdirs()
+        file.writeBytes(data)
+    }
+
     fun import(file: File, name: String): JSONObject {
         val info = NativeMedia(context).probe(file)
         val id = uuid()
@@ -85,6 +115,106 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 store.delete("profile", a.s("id"))
                 return obj("ok" to true)
             }
+            "profile.test" -> {
+                val profile = store.get("profile", a.s("id"))
+                val def = definition(profile.s("provider"))
+                val checkedAt = System.currentTimeMillis()
+                val file = File(store.root, "profile-tests/${profile.s("id")}.wav")
+                var storage: NativeStorage? = null
+                var staged: JSONObject? = null
+                return try {
+                    testWav(file)
+                    val message =
+                        when (def.s("category")) {
+                            "translation" -> {
+                                NativeTranslation(profile)
+                                    .translate(
+                                        listOf(obj("id" to "connection-test", "text" to "Connection test.")),
+                                        "en",
+                                        "zh",
+                                        "",
+                                        "",
+                                    )
+                                "翻译请求成功，返回结构与字幕 ID 校验通过"
+                            }
+                            "storage" -> {
+                                storage = NativeStorage(profile)
+                                staged =
+                                    storage!!.put(
+                                        file,
+                                        "subtitle/profile-tests/${uuid()}.wav",
+                                    )
+                                "临时对象上传成功，清理请求已执行"
+                            }
+                            else -> {
+                                var url = ""
+                                var uri = ""
+                                if (
+                                    def.s("input") != "file" ||
+                                        profile.s("provider") == "azure" &&
+                                            profile.s("model") == "batch"
+                                ) {
+                                    val candidate =
+                                        store.list("profile").firstOrNull { item ->
+                                            val storageDef = definition(item.s("provider"))
+                                            storageDef.s("category") == "storage" &&
+                                                (def.s("input") != "gcs" ||
+                                                    item.s("provider") == "storage-gcs") &&
+                                                (def.s("input") != "s3" ||
+                                                    item.s("provider") == "storage-s3")
+                                        } ?: error("该识别服务测试需要先配置兼容的临时存储")
+                                    storage = NativeStorage(candidate)
+                                    staged =
+                                        storage!!.put(
+                                            file,
+                                            "subtitle/profile-tests/${uuid()}.wav",
+                                        )
+                                    url = staged!!.s("url")
+                                    uri = staged!!.s("uri")
+                                }
+                                try {
+                                    val result =
+                                        NativeAsr(profile)
+                                            .submit(
+                                                file,
+                                                obj(
+                                                    "durationMs" to 800,
+                                                    "language" to "en",
+                                                    "requestId" to uuid(),
+                                                    "url" to url,
+                                                    "objectUri" to uri,
+                                                ),
+                                            )
+                                    if (result.s("type") == "complete")
+                                        "识别请求成功，带时间戳结果校验通过"
+                                    else "识别任务已被服务接受（远端任务 ${result.s("id")}）"
+                                } catch (e: IllegalArgumentException) {
+                                    if (e.message?.contains("未返回带时间戳字幕") == true)
+                                        "识别请求成功；连接测试音频不含语音，未产生字幕"
+                                    else throw e
+                                }
+                            }
+                        }
+                    profile
+                        .put("verification", "verified")
+                        .put("verifiedAt", checkedAt)
+                        .put("verificationMessage", message)
+                    store.put("profile", profile.s("id"), profile)
+                    obj("ok" to true, "checkedAt" to checkedAt, "message" to message)
+                } catch (e: Exception) {
+                    val message = e.message ?: "测试失败"
+                    profile
+                        .put("verification", "unverified")
+                        .put("verifiedAt", checkedAt)
+                        .put("verificationMessage", message.take(500))
+                    store.put("profile", profile.s("id"), profile)
+                    obj("ok" to false, "checkedAt" to checkedAt, "message" to message)
+                } finally {
+                    if (staged != null && storage != null)
+                        runCatching { storage!!.remove(staged!!.s("key")) }
+                    file.delete()
+                }
+            }
             "project.blank" -> {
                 val id = uuid()
                 val p =
@@ -102,7 +232,7 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
             "library.list" -> return JSONArray()
             "job.create" -> {
                 val kind = a.s("kind")
-                require(kind in listOf("transcribe", "translate", "render"))
+                require(kind in listOf("transcribe", "translate", "segment", "rewrite", "render"))
                 val project = store.get("project", a.s("id"))
                 val params = a.o("params")
                 if (kind != "render") {
@@ -113,6 +243,10 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                     ) {
                         "供应商类型不匹配"
                     }
+                    if (kind in listOf("segment", "rewrite"))
+                        require(definition(profile.s("provider")).optBoolean("aiOperations")) {
+                            "该翻译服务不支持 AI 断句或指令修改"
+                        }
                 }
                 if (kind != "transcribe")
                     require(project.o("document").a("cues").length() > 0) { "请先生成字幕" }
@@ -121,6 +255,17 @@ class NativeService(private val context: Context, val store: NativeStore = Nativ
                 if (kind == "render") require(project.has("media")) { "请先导入视频" }
                 if (kind == "translate")
                     require(params.s("targetLanguage").isNotBlank()) { "请选择目标语言" }
+                if (kind == "rewrite") {
+                    require(params.s("instruction").isNotBlank()) { "请输入 AI 修改要求" }
+                    if (params.s("scope", "source") == "translation")
+                        require(params.s("targetLanguage").isNotBlank()) { "请选择译文语言" }
+                }
+                if (kind == "segment") {
+                    require(params.optInt("maxCharacters", 24) in 4..120) { "每条字幕字数无效" }
+                    require(params.optLong("maxDurationMs", 5000) in 500..20000) {
+                        "每条字幕时长无效"
+                    }
+                }
                 if (kind == "render")
                     Subtitles.export(
                         project.o("document"),

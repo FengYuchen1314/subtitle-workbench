@@ -183,12 +183,14 @@ class NativeHttp(private val profile: JSONObject) {
         field: String,
         fields: Map<String, String>,
         headers: Map<String, String>,
+        fileLast: Boolean = false,
     ): JSONObject {
-        val b =
-            MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart(field, "audio.wav", file.asRequestBody("audio/wav".toMediaType()))
+        val b = MultipartBody.Builder().setType(MultipartBody.FORM)
+        if (!fileLast)
+            b.addFormDataPart(field, "audio.wav", file.asRequestBody("audio/wav".toMediaType()))
         fields.forEach { (k, v) -> b.addFormDataPart(k, v) }
+        if (fileLast)
+            b.addFormDataPart(field, "audio.wav", file.asRequestBody("audio/wav".toMediaType()))
         return request(url, "POST", b.build(), headers) as JSONObject
     }
 

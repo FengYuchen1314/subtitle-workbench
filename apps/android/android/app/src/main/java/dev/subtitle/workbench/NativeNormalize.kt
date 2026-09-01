@@ -73,6 +73,8 @@ object NativeNormalize {
         when (provider) {
             "openai",
             "groq",
+            "mistral",
+            "xai",
             "custom-openai" ->
                 if (raw.a("segments").length() > 0)
                     raw.a("segments").objects().forEach {
@@ -83,6 +85,83 @@ object NativeNormalize {
                         val w = it as JSONObject
                         word(w, w.s("word", w.s("text")), "start", "end")
                     }
+            "cloudflare" -> {
+                val result = raw.optJSONObject("result") ?: raw
+                val data = result.optJSONObject("transcription_info") ?: result
+                if (data.a("segments").length() > 0)
+                    data.a("segments").objects().forEach {
+                        timed(it.s("text"), it.opt("start"), it.opt("end"), 1000.0, it.s("speaker"))
+                    }
+                else
+                    if (data.a("words").length() > 0)
+                        words(data.a("words").values()) {
+                            val w = it as JSONObject
+                            word(w, w.s("word", w.s("text")), "start", "end")
+                        }
+                    else if (data.s("vtt").isNotBlank()) {
+                        fun stamp(value: String): Double {
+                            val parts = value.replace(',', '.').split(':').map { it.toDouble() }
+                            return if (parts.size == 3)
+                                parts[0] * 3600 + parts[1] * 60 + parts[2]
+                            else parts[0] * 60 + parts[1]
+                        }
+                        data.s("vtt")
+                            .replace("\r", "")
+                            .split(Regex("\n\\s*\n"))
+                            .forEach { block ->
+                                val lines = block.lines()
+                                val index = lines.indexOfFirst { it.contains("-->") }
+                                if (index >= 0) {
+                                    val range = lines[index].split("-->")
+                                    if (range.size == 2)
+                                        timed(
+                                            lines.drop(index + 1).joinToString("\n"),
+                                            stamp(range[0].trim()),
+                                            stamp(range[1].trim().substringBefore(' ')),
+                                            1000.0,
+                                        )
+                                }
+                            }
+                    }
+            }
+            "soniox" ->
+                words(raw.a("tokens").values()) {
+                    val w = it as JSONObject
+                    word(
+                        w,
+                        w.s("text"),
+                        "start_ms",
+                        "end_ms",
+                        1.0,
+                        w.s("speaker"),
+                    )
+                }
+            "gladia" -> {
+                val transcript =
+                    raw.o("result").optJSONObject("transcription")
+                        ?: raw.optJSONObject("transcription")
+                        ?: obj()
+                transcript.a("utterances").objects().forEach {
+                    timed(
+                        it.s("text"),
+                        it.opt("start"),
+                        it.opt("end"),
+                        1000.0,
+                        it.s("speaker"),
+                    )
+                }
+            }
+            "revai" ->
+                words(
+                    raw.a("monologues").objects().flatMap { monologue ->
+                        monologue.a("elements").objects()
+                            .filter { it.s("type") == "text" }
+                            .map { it.put("speaker", monologue.s("speaker")) }
+                    }
+                ) {
+                    val w = it as JSONObject
+                    word(w, w.s("value"), "ts", "end_ts", 1000.0, w.s("speaker"))
+                }
             "custom-json" ->
                 raw.a("cues").objects().forEach {
                     timed(it.s("text"), it.opt("startMs"), it.opt("endMs"), 1.0, it.s("speaker"))

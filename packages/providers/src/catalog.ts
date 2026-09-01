@@ -1,20 +1,42 @@
 import type { ProviderDefinition, ProviderField } from "@subtitle/core";
-const key: ProviderField = { key: "apiKey", label: "API Key", secret: true };
+const key: ProviderField = {
+  key: "apiKey",
+  label: "API Key",
+  secret: true,
+  section: "credentials",
+};
 const endpoint: ProviderField = {
   key: "endpoint",
   label: "服务地址",
   optional: true,
   placeholder: "HTTPS API base URL",
+  section: "endpoint",
 };
-const region: ProviderField = { key: "region", label: "区域", optional: true };
+const region: ProviderField = {
+  key: "region",
+  label: "区域",
+  optional: true,
+  section: "endpoint",
+};
 const access: ProviderField[] = [
-  { key: "accessKey", label: "Access Key / Secret ID", secret: true },
-  { key: "secretKey", label: "Secret Key", secret: true },
+  {
+    key: "accessKey",
+    label: "Access Key / Secret ID",
+    secret: true,
+    section: "credentials",
+  },
+  {
+    key: "secretKey",
+    label: "Secret Key",
+    secret: true,
+    section: "credentials",
+  },
 ];
 const serviceAccount: ProviderField = {
   key: "serviceAccount",
   label: "Service Account JSON",
   secret: true,
+  section: "credentials",
 };
 const def = (
   id: string,
@@ -35,12 +57,47 @@ const def = (
   category: "asr",
   timestamps: "word",
   maxChunkSeconds: 300,
+  checkedAt: "2026-09-01",
+  modelDetails: models.map((id, index) => ({
+    id,
+    status: index === 0 ? "recommended" : "current",
+    subtitleTiming: true,
+  })),
+});
+const translation = (
+  id: string,
+  name: string,
+  models: string[],
+  fields: ProviderField[],
+  docs: string,
+  aiOperations = false,
+  note = "",
+): ProviderDefinition => ({
+  id,
+  name,
+  models,
+  modelDetails: models.map((model, index) => ({
+    id: model,
+    status: index === 0 ? "recommended" : "current",
+  })),
+  category: "translation",
+  fields,
+  docs,
+  note,
+  aiOperations,
+  checkedAt: "2026-09-01",
 });
 export const catalog: ProviderDefinition[] = [
   def(
     "aliyun",
     "阿里云百炼",
-    ["qwen3-asr-flash-filetrans", "fun-asr", "paraformer-v2"],
+    [
+      "qwen-audio-3.0-asr-flash-filetrans",
+      "fun-asr-flash-2026-06-15",
+      "qwen3-asr-flash-filetrans",
+      "fun-asr",
+      "paraformer-v2",
+    ],
     "url",
     [key, endpoint],
     "https://www.alibabacloud.com/help/en/model-studio/non-realtime-speech-recognition-user-guide",
@@ -73,7 +130,7 @@ export const catalog: ProviderDefinition[] = [
   def(
     "baidu",
     "百度智能云",
-    ["80006", "1737", "8953"],
+    ["80006", "8953", "80001", "1737"],
     "url",
     [key, { key: "secretKey", label: "Secret Key", secret: true }],
     "https://ai.baidu.com/ai-doc/SPEECH/Klbxern8v",
@@ -114,7 +171,7 @@ export const catalog: ProviderDefinition[] = [
   def(
     "openai",
     "OpenAI",
-    ["whisper-1", "gpt-4o-transcribe-diarize"],
+    ["gpt-transcribe", "gpt-4o-transcribe-diarize", "whisper-1"],
     "file",
     [key, endpoint],
     "https://developers.openai.com/api/docs/guides/speech-to-text",
@@ -204,6 +261,81 @@ export const catalog: ProviderDefinition[] = [
     [key, endpoint],
     "https://docs.speechmatics.com/speech-to-text/batch/quickstart",
   ),
+  {
+    ...def(
+      "mistral",
+      "Mistral · Voxtral",
+      ["voxtral-mini-latest"],
+      "file",
+      [key, endpoint],
+      "https://docs.mistral.ai/api/endpoint/audio/transcriptions",
+      "Voxtral Mini Transcribe 2；支持词级时间戳和说话人分离",
+    ),
+    speakerDiarization: true,
+    maxChunkSeconds: 10800,
+  },
+  {
+    ...def(
+      "xai",
+      "xAI · Speech to Text",
+      ["batch"],
+      "file",
+      [key, endpoint],
+      "https://docs.x.ai/developers/model-capabilities/audio/speech-to-text",
+      "Batch STT 无需填写模型 ID；返回词级时间戳",
+    ),
+    speakerDiarization: true,
+  },
+  {
+    ...def(
+      "soniox",
+      "Soniox",
+      ["stt-async-v5"],
+      "url",
+      [key, endpoint],
+      "https://soniox.com/docs/stt/async/async-transcription",
+      "异步文件识别；时间戳默认随 token 返回",
+    ),
+    speakerDiarization: true,
+    maxChunkSeconds: 18000,
+  },
+  {
+    ...def(
+      "gladia",
+      "Gladia",
+      ["solaria-1", "solaria-3"],
+      "file",
+      [key, endpoint],
+      "https://docs.gladia.io/chapters/pre-recorded-stt/quickstart",
+      "Solaria 3 仅支持英、法、德、西、意单语；通用多语种请选择 Solaria 1",
+    ),
+    speakerDiarization: true,
+  },
+  {
+    ...def(
+      "revai",
+      "Rev AI",
+      ["standard"],
+      "file",
+      [key, endpoint],
+      "https://docs.rev.ai/api/asynchronous/get-started",
+      "异步文件识别；JSON transcript 返回逐词时间戳和说话人",
+    ),
+    speakerDiarization: true,
+  },
+  def(
+    "cloudflare",
+    "Cloudflare Workers AI",
+    ["@cf/openai/whisper-large-v3-turbo", "@cf/openai/whisper"],
+    "file",
+    [
+      key,
+      { key: "accountId", label: "Account ID", section: "endpoint" },
+      endpoint,
+    ],
+    "https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/",
+    "使用 Workers AI REST API；返回带时间轴的 VTT/segments",
+  ),
   def(
     "custom-openai",
     "自定义 · OpenAI ASR",
@@ -228,31 +360,102 @@ export const catalog: ProviderDefinition[] = [
     "",
     "POST multipart file；返回 language 和 cues（毫秒时间戳）",
   ),
-  ...[
-    ["llm-openai", "OpenAI / 兼容翻译", ["gpt-4.1-mini"]],
-    ["llm-deepseek", "DeepSeek", ["deepseek-chat"]],
-    ["llm-qwen", "通义千问", ["qwen-plus"]],
-    ["llm-doubao", "豆包 / 火山方舟", ["填写已开通模型 ID"]],
-    ["llm-gemini", "Google Gemini", ["gemini-2.5-flash"]],
-    ["llm-claude", "Anthropic Claude", ["claude-sonnet-4-6"]],
-    ["deepl", "DeepL", ["default"]],
-    ["translate-google", "Google Cloud Translation", ["nmt"]],
-    ["translate-azure", "Azure Translator", ["default"]],
-  ].map(
-    ([id, name, models]) =>
-      ({
-        id,
-        name,
-        models,
-        category: "translation",
-        fields:
-          id === "translate-google"
-            ? [serviceAccount, { key: "projectId", label: "Project ID" }]
-            : id === "translate-azure"
-              ? [key, region, endpoint]
-              : [key, endpoint],
-        docs: "",
-      }) as ProviderDefinition,
+  translation(
+    "llm-openai",
+    "OpenAI / OpenAI 兼容",
+    ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.4-nano"],
+    [key, endpoint],
+    "https://developers.openai.com/api/docs/models",
+    true,
+    "兼容服务可覆盖服务地址并手动填写模型；需支持 JSON 输出",
+  ),
+  translation(
+    "llm-deepseek",
+    "DeepSeek",
+    ["deepseek-v4-flash", "deepseek-v4-pro"],
+    [key, endpoint],
+    "https://api-docs.deepseek.com/quick_start/pricing",
+    true,
+    "deepseek-chat / reasoner 已于 2026-07-24 弃用，不再作为默认项",
+  ),
+  translation(
+    "llm-qwen",
+    "通义千问 · 通用模型",
+    ["qwen-plus", "qwen-max"],
+    [key, endpoint],
+    "https://help.aliyun.com/zh/model-studio/getting-started/models",
+    true,
+  ),
+  translation(
+    "qwen-mt",
+    "通义千问 · Qwen-MT 专用翻译",
+    ["qwen-mt-flash", "qwen-mt-plus", "qwen-mt-lite"],
+    [key, { ...endpoint, optional: false }],
+    "https://help.aliyun.com/zh/model-studio/machine-translation/",
+    false,
+    "专用翻译模型不支持 AI 断句或指令改写；建议使用工作空间专属 API Host",
+  ),
+  translation(
+    "llm-doubao",
+    "豆包 / 火山方舟",
+    ["填写已开通的 Endpoint ID"],
+    [key, endpoint],
+    "https://www.volcengine.com/docs/82379/1799865",
+    true,
+    "方舟调用填写控制台创建的推理接入点 ID",
+  ),
+  translation(
+    "llm-gemini",
+    "Google Gemini",
+    ["gemini-3.7-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
+    [key, endpoint],
+    "https://ai.google.dev/gemini-api/docs/models",
+    true,
+  ),
+  translation(
+    "llm-claude",
+    "Anthropic Claude",
+    ["claude-sonnet-5", "claude-fable-5", "claude-haiku-4-5-20251001"],
+    [key, endpoint],
+    "https://docs.anthropic.com/en/docs/about-claude/models/overview",
+    true,
+  ),
+  translation(
+    "llm-mistral",
+    "Mistral AI",
+    ["mistral-small-2603", "mistral-medium-latest"],
+    [key, endpoint],
+    "https://docs.mistral.ai/inference",
+    true,
+  ),
+  translation(
+    "llm-xai",
+    "xAI · Grok",
+    ["grok-4.6", "grok-4.3"],
+    [key, endpoint],
+    "https://docs.x.ai/developers/models",
+    true,
+  ),
+  translation(
+    "deepl",
+    "DeepL",
+    ["default"],
+    [key, endpoint],
+    "https://developers.deepl.com/api-reference/translate/request-translation",
+  ),
+  translation(
+    "translate-google",
+    "Google Cloud Translation",
+    ["nmt"],
+    [serviceAccount, { key: "projectId", label: "Project ID" }],
+    "https://cloud.google.com/translate/docs/reference/rest/v3/projects/translateText",
+  ),
+  translation(
+    "translate-azure",
+    "Azure Translator",
+    ["default"],
+    [key, region, endpoint],
+    "https://learn.microsoft.com/azure/ai-services/translator/reference/v3-0-translate",
   ),
   ...(["s3", "oss", "cos", "gcs"] as const).map(
     (id) =>
@@ -285,6 +488,63 @@ export const catalog: ProviderDefinition[] = [
       }) as ProviderDefinition,
   ),
 ];
+const modelNotes: Record<
+  string,
+  Record<
+    string,
+    Partial<NonNullable<ProviderDefinition["modelDetails"]>[number]>
+  >
+> = {
+  openai: {
+    "gpt-transcribe": {
+      label: "gpt-transcribe（推荐）",
+      note: "当前通用转写模型；本项目请求 verbose_json 与原生时间戳。",
+    },
+    "gpt-4o-transcribe-diarize": {
+      label: "gpt-4o-transcribe-diarize（说话人）",
+      note: "返回带说话人标签的分段时间轴，不发送 timestamp_granularities。",
+    },
+    "whisper-1": {
+      label: "whisper-1（兼容）",
+      note: "保留用于已有账号和兼容服务，支持 verbose_json 时间戳。",
+    },
+  },
+  mistral: {
+    "voxtral-mini-latest": {
+      label: "Voxtral Mini Transcribe 2",
+      note: "官方 latest 别名；支持词级时间戳、说话人分离及最长三小时音频。",
+    },
+  },
+  xai: {
+    batch: {
+      label: "Batch STT（无需模型 ID）",
+      note: "xAI 当前接口不接收 model 字段；这里的值只用于保存配置。",
+    },
+  },
+  gladia: {
+    "solaria-1": {
+      note: "多语种和自动语言识别场景的默认选择。",
+    },
+    "solaria-3": {
+      note: "当前仅用于英、法、德、西、意单语；不启用代码切换。",
+    },
+  },
+  "qwen-mt": {
+    "qwen-mt-flash": {
+      label: "qwen-mt-flash（推荐通用）",
+      note: "官方推荐的通用机器翻译型号。",
+    },
+    "qwen-mt-plus": {
+      label: "qwen-mt-plus（质量优先）",
+      note: "质量优先；通常比 Flash 成本和延迟更高。",
+    },
+  },
+};
+for (const entry of catalog)
+  entry.modelDetails = entry.modelDetails?.map((model) => ({
+    ...model,
+    ...(modelNotes[entry.id]?.[model.id] || {}),
+  }));
 for (const entry of catalog)
   if (entry.category === "asr")
     entry.fields.push({

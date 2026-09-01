@@ -12,6 +12,8 @@ import {
   timestamp,
   defaultStyle,
   cue,
+  applySegmentationPlan,
+  applyRewrite,
 } from "@subtitle/core";
 test("shared Kotlin/TypeScript timeline fixture restores offsets, clamps and removes overlap", () => {
   const f = JSON.parse(
@@ -122,4 +124,58 @@ test("edits clear stale word timestamps and splitting cannot create empty cues",
   assert.throws(() => splitCue(single, single.cues[0].id, 500), /不足/);
   assert.throws(() => splitCue(doc, c.id, NaN), /拆分点/);
   assert.throws(() => editCue(doc, c.id, { text: " " }), /字幕文字/);
+});
+
+test("AI segmentation preserves every character and derives monotonic timing locally", () => {
+  const doc = parseSubtitles(
+      "1\n00:00:01,000 --> 00:00:05,000\n这是第一句话，这是第二句话。",
+    ),
+    original = doc.cues[0];
+  const result = applySegmentationPlan(
+    doc,
+    { [original.id]: ["这是第一句话，", "这是第二句话。"] },
+    { maxCharacters: 10, maxDurationMs: 3000, minCharacters: 2 },
+  );
+  assert.equal(result.cues.map((item) => item.text).join(""), original.text);
+  assert.equal(result.cues[0].id, original.id);
+  assert.equal(result.cues[0].startMs, 1000);
+  assert.equal(result.cues.at(-1)!.endMs, 5000);
+  assert.ok(result.cues[0].endMs <= result.cues[1].startMs);
+  assert.throws(
+    () =>
+      applySegmentationPlan(
+        doc,
+        { [original.id]: ["AI 删除了原文"] },
+        { maxCharacters: 20, maxDurationMs: 5000 },
+      ),
+    /完整保留/,
+  );
+});
+
+test("AI rewrite requires exact IDs, preserves timing and marks source translations stale", () => {
+  const doc = parseSubtitles(sample);
+  for (const item of doc.cues)
+    item.translations.en = {
+      text: `translated-${item.id}`,
+      sourceRevision: item.revision,
+      provider: "fixture",
+    };
+  const values = Object.fromEntries(
+    doc.cues.map((item) => [item.id, `改写：${item.text}`]),
+  );
+  const result = applyRewrite(doc, values, "source", "en", "ai:test");
+  assert.deepEqual(
+    result.cues.map(({ startMs, endMs }) => ({ startMs, endMs })),
+    doc.cues.map(({ startMs, endMs }) => ({ startMs, endMs })),
+  );
+  assert.ok(
+    result.cues.every(
+      (item) => item.translations.en.sourceRevision !== item.revision,
+    ),
+  );
+  assert.throws(
+    () =>
+      applyRewrite(doc, { [doc.cues[0].id]: "漏了一句" }, "source", "en", "ai"),
+    /漏句/,
+  );
 });

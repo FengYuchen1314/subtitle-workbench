@@ -131,7 +131,11 @@ export class CloudAsr implements AsrProvider {
       case "custom-json": {
         if (
           p.provider === "openai" &&
-          !["whisper-1", "gpt-4o-transcribe-diarize"].includes(p.model)
+          ![
+            "whisper-1",
+            "gpt-transcribe",
+            "gpt-4o-transcribe-diarize",
+          ].includes(p.model)
         )
           throw new ProviderError("此模型没有本项目所需的原生字幕时间戳");
         const form = new FormData();
@@ -159,6 +163,106 @@ export class CloudAsr implements AsrProvider {
             { body: form, headers: this.auth() },
           ),
         );
+      }
+      case "mistral": {
+        const form = new FormData();
+        form.set("file", await file(), "audio.wav");
+        form.set("model", p.model);
+        form.append("timestamp_granularities", "word");
+        form.set("diarize", "true");
+        if (lang) form.set("language", lang);
+        return this.complete(
+          await this.http.request(
+            `${base(o.endpoint, "https://api.mistral.ai/v1")}/audio/transcriptions`,
+            { body: form, headers: this.auth() },
+          ),
+        );
+      }
+      case "xai": {
+        const form = new FormData();
+        form.set("format", "true");
+        form.set("diarize", "true");
+        if (lang) form.set("language", lang);
+        // xAI requires the file field to be appended after all other fields.
+        form.set("file", await file(), "audio.wav");
+        return this.complete(
+          await this.http.request(
+            `${base(o.endpoint, "https://api.x.ai/v1")}/stt`,
+            { body: form, headers: this.auth() },
+          ),
+        );
+      }
+      case "cloudflare": {
+        const bytes = await readFile(input.path);
+        const root = base(o.endpoint, "https://api.cloudflare.com/client/v4");
+        return this.complete(
+          await this.http.request(
+            `${root}/accounts/${encodeURIComponent(requireValue(o.accountId, "Account ID"))}/ai/run/${p.model}`,
+            {
+              headers: this.auth(),
+              json: {
+                audio: bytes.toString("base64"),
+                task: "transcribe",
+                vad_filter: true,
+                ...(lang ? { language: lang } : {}),
+              },
+            },
+          ),
+        );
+      }
+      case "soniox": {
+        const root = base(o.endpoint, "https://api.soniox.com/v1");
+        const response = await this.http.request(`${root}/transcriptions`, {
+          headers: this.auth(),
+          json: {
+            model: p.model,
+            audio_url: requireValue(input.url, "音频临时存储"),
+            enable_speaker_diarization: true,
+            enable_language_identification: !lang,
+            ...(lang ? { language_hints: [lang] } : {}),
+            client_reference_id: input.requestId,
+          },
+        });
+        return this.pending(response.id);
+      }
+      case "gladia": {
+        const root = base(o.endpoint, "https://api.gladia.io/v2");
+        const form = new FormData();
+        form.set("audio", await file(), "audio.wav");
+        const uploaded = await this.http.request(`${root}/upload`, {
+          body: form,
+          headers: { "x-gladia-key": s.apiKey },
+        });
+        const response = await this.http.request(`${root}/pre-recorded`, {
+          headers: { "x-gladia-key": s.apiKey },
+          json: {
+            audio_url: requireValue(uploaded.audio_url, "Gladia 文件 URL"),
+            model: p.model,
+            diarization: true,
+            sentences: true,
+            language_config: {
+              languages: lang ? [lang] : [],
+              code_switching: !lang && p.model !== "solaria-3",
+            },
+          },
+        });
+        return this.pending(response.id);
+      }
+      case "revai": {
+        const form = new FormData();
+        form.set("media", await file(), "audio.wav");
+        form.set(
+          "options",
+          JSON.stringify({
+            metadata: input.requestId,
+            ...(lang ? { language: lang } : {}),
+          }),
+        );
+        const response = await this.http.request(
+          `${base(o.endpoint, "https://api.rev.ai/speechtotext/v1")}/jobs`,
+          { body: form, headers: this.auth() },
+        );
+        return this.pending(response.id);
       }
       case "aliyun": {
         const qwen = p.model.startsWith("qwen"),
@@ -636,6 +740,57 @@ export class CloudAsr implements AsrProvider {
               ),
             )
           : { type: "waiting" };
+      }
+      case "soniox": {
+        const root = base(o.endpoint, "https://api.soniox.com/v1");
+        const response = await this.http.request(
+          `${root}/transcriptions/${encodeURIComponent(task.id)}`,
+          { headers: this.auth() },
+        );
+        if (response.status === "error")
+          throw new ProviderError(response.error_message || "Soniox 转写失败");
+        if (response.status !== "completed") return { type: "waiting" };
+        return this.complete(
+          await this.http.request(
+            `${root}/transcriptions/${encodeURIComponent(task.id)}/transcript`,
+            { headers: this.auth() },
+          ),
+        );
+      }
+      case "gladia": {
+        const root = base(o.endpoint, "https://api.gladia.io/v2");
+        const response = await this.http.request(
+          `${root}/pre-recorded/${encodeURIComponent(task.id)}`,
+          { headers: { "x-gladia-key": s.apiKey } },
+        );
+        if (response.status === "error")
+          throw new ProviderError(
+            response.error_message || response.error_code || "Gladia 转写失败",
+          );
+        return response.status === "done"
+          ? this.complete(response)
+          : { type: "waiting" };
+      }
+      case "revai": {
+        const root = base(o.endpoint, "https://api.rev.ai/speechtotext/v1");
+        const response = await this.http.request(
+          `${root}/jobs/${encodeURIComponent(task.id)}`,
+          { headers: this.auth() },
+        );
+        if (response.status === "failed")
+          throw new ProviderError(response.failure_detail || "Rev AI 转写失败");
+        if (response.status !== "transcribed") return { type: "waiting" };
+        return this.complete(
+          await this.http.request(
+            `${root}/jobs/${encodeURIComponent(task.id)}/transcript`,
+            {
+              headers: {
+                ...this.auth(),
+                Accept: "application/vnd.rev.transcript.v1.0+json",
+              },
+            },
+          ),
+        );
       }
       default:
         throw new ProviderError("同步供应商没有可轮询任务");

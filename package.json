@@ -11,9 +11,9 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "node --env-file-if-exists=.env node_modules/next/dist/bin/next dev apps/web --hostname 127.0.0.1",
+    "dev": "next dev apps/web --hostname 127.0.0.1",
     "worker": "node --env-file-if-exists=.env --import tsx packages/runtime/src/worker-cli.ts",
-    "start": "node --env-file-if-exists=.env node_modules/next/dist/bin/next start apps/web --hostname 0.0.0.0",
+    "start": "next start apps/web --hostname 0.0.0.0",
     "build": "next build apps/web",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",

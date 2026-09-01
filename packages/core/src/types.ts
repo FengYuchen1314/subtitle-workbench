@@ -1,5 +1,6 @@
 export type OutputMode = "source" | "translation" | "bilingual";
-export type JobKind = "transcribe" | "translate" | "render";
+export type JobKind =
+  "transcribe" | "translate" | "segment" | "rewrite" | "render";
 export type JobStatus =
   "queued" | "running" | "completed" | "failed" | "cancelled" | "attention";
 export interface Word {
@@ -85,6 +86,8 @@ export interface Profile {
   secrets: Record<string, string>;
   allowPrivateEndpoint: boolean;
   verification: "unverified" | "verified";
+  verifiedAt?: number;
+  verificationMessage?: string;
 }
 export interface PublicProfile extends Omit<Profile, "secrets"> {
   secretFields: string[];
@@ -95,18 +98,30 @@ export interface ProviderField {
   secret?: boolean;
   optional?: boolean;
   placeholder?: string;
+  section?: "credentials" | "endpoint" | "advanced";
+}
+export interface ProviderModel {
+  id: string;
+  label?: string;
+  status?: "recommended" | "current" | "legacy";
+  subtitleTiming?: boolean;
+  note?: string;
 }
 export interface ProviderDefinition {
   id: string;
   name: string;
   category: "asr" | "translation" | "storage";
   models: string[];
+  modelDetails?: ProviderModel[];
   input?: "file" | "url" | "s3" | "gcs";
   timestamps?: "word" | "segment" | "model";
   maxChunkSeconds?: number;
   fields: ProviderField[];
   docs: string;
   note?: string;
+  checkedAt?: string;
+  speakerDiarization?: boolean;
+  aiOperations?: boolean;
 }
 export interface Job {
   id: string;
@@ -130,6 +145,11 @@ export interface JobParams {
   glossary?: string;
   audioTrack?: number;
   resolution?: number;
+  instruction?: string;
+  scope?: "source" | "translation";
+  maxCharacters?: number;
+  maxDurationMs?: number;
+  minCharacters?: number;
 }
 export interface Transcript {
   language: string;
@@ -161,6 +181,26 @@ export interface TranslationProvider {
     context: string,
     glossary: string,
   ): Promise<Record<string, string>>;
+}
+export interface SubtitleAiProvider {
+  rewrite(
+    cues: { id: string; text: string }[],
+    language: string,
+    instruction: string,
+  ): Promise<Record<string, string>>;
+  segment(
+    cues: { id: string; text: string; durationMs: number }[],
+    language: string,
+    maxCharacters: number,
+    maxDurationMs: number,
+    instruction: string,
+  ): Promise<Record<string, string[]>>;
+}
+export interface ProfileTestResult {
+  ok: boolean;
+  message: string;
+  checkedAt: number;
+  detail?: string;
 }
 export interface StagedObject {
   key: string;

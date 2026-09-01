@@ -43,7 +43,7 @@ class ProtocolTest {
     }
 
     @Test
-    fun allSixteenProvidersShareTypeScriptFixtures() {
+    fun baselineSixteenProvidersShareTypeScriptFixtures() {
         val data =
             JSONObject(
                 javaClass.classLoader!!.getResourceAsStream("asr.json")!!.bufferedReader().use {
@@ -60,6 +60,111 @@ class ProtocolTest {
             assertEquals(provider, 2000L, result.getLong("endMs"))
             assertEquals(provider, "hello", result.getString("text"))
         }
+    }
+
+    @Test
+    fun sixAdditionalProvidersNormalizeTimedResults() {
+        val fixtures =
+            mapOf(
+                "mistral" to obj("words" to arr(listOf(obj("word" to "hello", "start" to 1, "end" to 2)))),
+                "xai" to obj("words" to arr(listOf(obj("text" to "hello", "start" to 1, "end" to 2)))),
+                "soniox" to
+                    obj(
+                        "tokens" to
+                            arr(
+                                listOf(
+                                    obj(
+                                        "text" to "hello",
+                                        "start_ms" to 1000,
+                                        "end_ms" to 2000,
+                                    )
+                                )
+                            )
+                    ),
+                "gladia" to
+                    obj(
+                        "result" to
+                            obj(
+                                "transcription" to
+                                    obj(
+                                        "utterances" to
+                                            arr(
+                                                listOf(
+                                                    obj(
+                                                        "text" to "hello",
+                                                        "start" to 1,
+                                                        "end" to 2,
+                                                    )
+                                                )
+                                            )
+                                    )
+                            )
+                    ),
+                "revai" to
+                    obj(
+                        "monologues" to
+                            arr(
+                                listOf(
+                                    obj(
+                                        "speaker" to 1,
+                                        "elements" to
+                                            arr(
+                                                listOf(
+                                                    obj(
+                                                        "type" to "text",
+                                                        "value" to "hello",
+                                                        "ts" to 1,
+                                                        "end_ts" to 2,
+                                                    )
+                                                )
+                                            ),
+                                    )
+                                )
+                            )
+                    ),
+                "cloudflare" to
+                    obj(
+                        "result" to
+                            obj(
+                                "vtt" to
+                                    "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhello\n"
+                            )
+                    ),
+            )
+        fixtures.forEach { (provider, fixture) ->
+            val cue = NativeNormalize.normalize(provider, fixture).a("cues").getJSONObject(0)
+            assertEquals(provider, 1000L, cue.getLong("startMs"))
+            assertEquals(provider, 2000L, cue.getLong("endMs"))
+            assertEquals(provider, "hello", cue.s("text"))
+        }
+    }
+
+    @Test
+    fun aiSegmentationAndRewritePreserveTimelineAndIds() {
+        val doc =
+            Subtitles.parse(
+                "1\n00:00:01,000 --> 00:00:05,000\n这是第一句话，这是第二句话。"
+            )
+        val original = doc.a("cues").getJSONObject(0)
+        val segmented =
+            Subtitles.segment(
+                doc,
+                obj(original.s("id") to arr(listOf("这是第一句话，", "这是第二句话。"))),
+                10,
+                3000,
+                2,
+            )
+        val cues = segmented.a("cues").objects()
+        assertEquals(original.s("text"), cues.joinToString("") { it.s("text") })
+        assertEquals(original.s("id"), cues.first().s("id"))
+        assertEquals(1000L, cues.first().getLong("startMs"))
+        assertEquals(5000L, cues.last().getLong("endMs"))
+        val values = obj().also { output -> cues.forEach { output.put(it.s("id"), "改写${it.s("text")}") } }
+        val rewritten = Subtitles.rewrite(segmented, values, "source", "", "ai:test")
+        assertEquals(
+            cues.map { it.getLong("startMs") to it.getLong("endMs") },
+            rewritten.a("cues").objects().map { it.getLong("startMs") to it.getLong("endMs") },
+        )
     }
 
     @Test

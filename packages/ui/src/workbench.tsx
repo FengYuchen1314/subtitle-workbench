@@ -87,6 +87,9 @@ function WorkbenchContent({ gateway }: { gateway: Gateway }) {
   const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState<PublicProfile | "new" | null>(null);
+  const [profileCategory, setProfileCategory] = useState<
+    "asr" | "translation" | "storage"
+  >("asr");
   const [library, setLibrary] = useState<string[] | null>(null);
   const [libraryFile, setLibraryFile] = useState<string>();
   const [libraryBusy, setLibraryBusy] = useState(false);
@@ -570,13 +573,6 @@ function WorkbenchContent({ gateway }: { gateway: Gateway }) {
             <>
               <div className="wb-page-heading">
                 <Typography.Title level={3}>模型与存储</Typography.Title>
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => setProfile("new")}
-                >
-                  添加配置
-                </Button>
               </div>
               <Alert
                 className="wb-gap"
@@ -596,72 +592,140 @@ function WorkbenchContent({ gateway }: { gateway: Gateway }) {
                     key: category,
                     label,
                     children: (
-                      <Table<PublicProfile>
-                        rowKey="id"
-                        scroll={{ x: 700 }}
-                        pagination={false}
-                        dataSource={state.profiles.filter(
-                          (p) =>
-                            catalog.find((d) => d.id === p.provider)
-                              ?.category === category,
-                        )}
-                        columns={[
-                          { title: "名称", dataIndex: "name" },
-                          {
-                            title: "厂商",
-                            render: (_, p) =>
-                              catalog.find((d) => d.id === p.provider)?.name,
-                          },
-                          { title: "模型 / 接口", dataIndex: "model" },
-                          {
-                            title: "联调状态",
-                            render: (_, p) => (
-                              <Tag
-                                color={
-                                  p.verification === "verified"
-                                    ? "success"
-                                    : "default"
-                                }
-                              >
-                                {p.verification === "verified"
-                                  ? "已联调"
-                                  : "未联调"}
-                              </Tag>
-                            ),
-                          },
-                          {
-                            title: "操作",
-                            width: 155,
-                            render: (_, p) => (
-                              <Space>
-                                <Button
-                                  size="small"
-                                  onClick={() => setProfile(p)}
-                                >
-                                  编辑
-                                </Button>
-                                <Button
-                                  size="small"
-                                  danger
-                                  disabled={busy}
-                                  onClick={() =>
-                                    modal.confirm({
-                                      title: `删除「${p.name}」？`,
-                                      content: "使用此配置的任务可能受影响。",
-                                      okText: "删除",
-                                      okButtonProps: { danger: true },
-                                      onOk: () =>
-                                        command("profile.delete", { id: p.id }),
-                                    })
-                                  }
-                                >
-                                  删除
-                                </Button>
-                              </Space>
-                            ),
-                          },
-                        ]}
-                      />
+                      <Space
+                        orientation="vertical"
+                        className="wb-full"
+                        size="middle"
+                      >
+                        <Flex
+                          justify="space-between"
+                          align="center"
+                          wrap
+                          gap={12}
+                        >
+                          <Typography.Text type="secondary">
+                            {category === "asr"
+                              ? "音频识别与时间戳能力"
+                              : category === "translation"
+                                ? "翻译、AI 断句与字幕指令修改"
+                                : "只用于需要 URL / 对象 URI 的识别服务"}
+                          </Typography.Text>
+                          <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => {
+                              setProfileCategory(category);
+                              setProfile("new");
+                            }}
+                          >
+                            添加{label}配置
+                          </Button>
+                        </Flex>
+                        <Table<PublicProfile>
+                          rowKey="id"
+                          scroll={{ x: 900 }}
+                          pagination={false}
+                          dataSource={state.profiles.filter(
+                            (p) =>
+                              catalog.find((d) => d.id === p.provider)
+                                ?.category === category,
+                          )}
+                          columns={[
+                            { title: "名称", dataIndex: "name" },
+                            {
+                              title: "厂商",
+                              render: (_, p) =>
+                                catalog.find((d) => d.id === p.provider)?.name,
+                            },
+                            { title: "模型 / 接口", dataIndex: "model" },
+                            {
+                              title: "联调状态",
+                              width: 180,
+                              render: (_, p) => (
+                                <Space orientation="vertical" size={0}>
+                                  <Tag
+                                    color={
+                                      p.verification === "verified"
+                                        ? "success"
+                                        : "default"
+                                    }
+                                  >
+                                    {p.verification === "verified"
+                                      ? "测试通过"
+                                      : "未通过测试"}
+                                  </Tag>
+                                  {p.verificationMessage && (
+                                    <Typography.Text type="secondary" ellipsis>
+                                      {p.verificationMessage}
+                                    </Typography.Text>
+                                  )}
+                                </Space>
+                              ),
+                            },
+                            {
+                              title: "操作",
+                              width: 230,
+                              render: (_, p) => (
+                                <Space>
+                                  <Button
+                                    size="small"
+                                    loading={busy}
+                                    onClick={() =>
+                                      modal.confirm({
+                                        title: `测试「${p.name}」？`,
+                                        content:
+                                          category === "storage"
+                                            ? "将上传并删除一个很小的临时对象。"
+                                            : "将发起一个很小的真实请求，厂商可能收取少量费用。需要 URL 的识别服务会使用已有的兼容存储配置。",
+                                        okText: "开始测试",
+                                        onOk: async () => {
+                                          const result = await command(
+                                            "profile.test",
+                                            { id: p.id },
+                                          );
+                                          if (result.ok)
+                                            message.success(result.message);
+                                          else message.error(result.message);
+                                        },
+                                      })
+                                    }
+                                  >
+                                    测试服务
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    onClick={() => {
+                                      setProfileCategory(category);
+                                      setProfile(p);
+                                    }}
+                                  >
+                                    编辑
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    danger
+                                    disabled={busy}
+                                    onClick={() =>
+                                      modal.confirm({
+                                        title: `删除「${p.name}」？`,
+                                        content: "使用此配置的任务可能受影响。",
+                                        okText: "删除",
+                                        okButtonProps: { danger: true },
+                                        onOk: () =>
+                                          command("profile.delete", {
+                                            id: p.id,
+                                          }),
+                                      })
+                                    }
+                                  >
+                                    删除
+                                  </Button>
+                                </Space>
+                              ),
+                            },
+                          ]}
+                        />
+                      </Space>
                     ),
                   }))}
                 />
@@ -673,6 +737,7 @@ function WorkbenchContent({ gateway }: { gateway: Gateway }) {
       {profile && (
         <ProfileDialog
           profile={profile === "new" ? undefined : profile}
+          category={profileCategory}
           close={() => setProfile(null)}
           command={command}
         />

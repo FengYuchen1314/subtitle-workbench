@@ -1,4 +1,11 @@
-import { readdir, realpath, stat } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   editCue,
@@ -14,7 +21,15 @@ import {
   type Profile,
   type SubtitleDocument,
 } from "@subtitle/core";
-import { catalog, providerDefinition } from "@subtitle/providers";
+import {
+  catalog,
+  CloudAsr,
+  CloudStorage,
+  CloudTranslation,
+  FetchTransport,
+  ProviderError,
+  providerDefinition,
+} from "@subtitle/providers";
 import { Store, inside } from "./store";
 import { FfmpegEngine } from "./media";
 import { availableFonts } from "./fonts";
@@ -92,6 +107,124 @@ export class Service {
       case "profile.delete":
         s.deleteProfile(String(args.id));
         return { ok: true };
+      case "profile.test": {
+        const profile = s.profile(String(args.id));
+        const definition = providerDefinition(profile.provider);
+        const checkedAt = Date.now();
+        let staged: { key: string } | undefined;
+        let storage: CloudStorage | undefined;
+        const folder = join(s.root, "profile-tests");
+        const path = join(folder, `${profile.id}.wav`);
+        try {
+          await mkdir(folder, { recursive: true });
+          const seconds = 0.8,
+            rate = 16000,
+            samples = Math.round(seconds * rate),
+            wav = Buffer.alloc(44 + samples * 2);
+          wav.write("RIFF", 0);
+          wav.writeUInt32LE(wav.length - 8, 4);
+          wav.write("WAVEfmt ", 8);
+          wav.writeUInt32LE(16, 16);
+          wav.writeUInt16LE(1, 20);
+          wav.writeUInt16LE(1, 22);
+          wav.writeUInt32LE(rate, 24);
+          wav.writeUInt32LE(rate * 2, 28);
+          wav.writeUInt16LE(2, 32);
+          wav.writeUInt16LE(16, 34);
+          wav.write("data", 36);
+          wav.writeUInt32LE(samples * 2, 40);
+          for (let i = 0; i < samples; i++)
+            wav.writeInt16LE(
+              Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 1200),
+              44 + i * 2,
+            );
+          await writeFile(path, wav);
+          let message: string;
+          if (definition.category === "translation") {
+            await new CloudTranslation(profile).translate(
+              [{ id: "connection-test", text: "Connection test." }],
+              "en",
+              "zh",
+              "",
+              "",
+            );
+            message = "翻译请求成功，返回结构与字幕 ID 校验通过";
+          } else if (definition.category === "storage") {
+            storage = new CloudStorage(profile);
+            staged = await storage.put(
+              path,
+              `subtitle/profile-tests/${crypto.randomUUID()}.wav`,
+            );
+            message = "临时对象上传成功，清理请求已执行";
+          } else {
+            let url: string | undefined, objectUri: string | undefined;
+            if (
+              definition.input !== "file" ||
+              (profile.provider === "azure" && profile.model === "batch")
+            ) {
+              const candidates = s
+                .profiles()
+                .filter(
+                  (item) =>
+                    providerDefinition(item.provider).category === "storage" &&
+                    (definition.input === "gcs"
+                      ? item.provider === "storage-gcs"
+                      : definition.input === "s3"
+                        ? item.provider === "storage-s3"
+                        : true),
+                );
+              const storageId = args.storageId || candidates[0]?.id;
+              if (!storageId)
+                throw new Error("该识别服务测试需要先配置兼容的临时存储");
+              storage = new CloudStorage(s.profile(storageId));
+              const object = await storage.put(
+                path,
+                `subtitle/profile-tests/${crypto.randomUUID()}.wav`,
+              );
+              staged = object;
+              url = object.url;
+              objectUri = object.uri;
+            }
+            try {
+              const response = await new CloudAsr(profile).submit({
+                path,
+                durationMs: seconds * 1000,
+                requestId: crypto.randomUUID(),
+                language: "en",
+                url,
+                objectUri,
+              });
+              message =
+                response.type === "complete"
+                  ? "识别请求成功，带时间戳结果校验通过"
+                  : `识别任务已被服务接受（远端任务 ${response.id}）`;
+            } catch (error) {
+              if (
+                error instanceof ProviderError &&
+                error.code === "NO_TIMESTAMPS"
+              )
+                message = "识别请求成功；连接测试音频不含语音，未产生字幕";
+              else throw error;
+            }
+          }
+          profile.verification = "verified";
+          profile.verifiedAt = checkedAt;
+          profile.verificationMessage = message;
+          s.saveProfile(profile);
+          return { ok: true, checkedAt, message };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "测试失败";
+          profile.verification = "unverified";
+          profile.verifiedAt = checkedAt;
+          profile.verificationMessage = message.slice(0, 500);
+          s.saveProfile(profile);
+          return { ok: false, checkedAt, message };
+        } finally {
+          if (staged && storage)
+            await storage.remove(staged.key).catch(() => {});
+          await rm(path, { force: true }).catch(() => {});
+        }
+      }
       case "project.blank":
         return s.createProject(args.name || "字幕项目");
       case "project.rename": {
@@ -204,7 +337,11 @@ export class Service {
         return p;
       }
       case "job.create": {
-        if (!["transcribe", "translate", "render"].includes(args.kind))
+        if (
+          !["transcribe", "translate", "segment", "rewrite", "render"].includes(
+            args.kind,
+          )
+        )
           throw new Error("无效任务类型");
         const params = jobParamsSchema.parse(args.params || {}),
           p = s.project(args.id);
@@ -213,6 +350,11 @@ export class Service {
             expected = args.kind === "transcribe" ? "asr" : "translation";
           if (providerDefinition(profile.provider).category !== expected)
             throw new Error("供应商类型不匹配");
+          if (
+            ["segment", "rewrite"].includes(args.kind) &&
+            !providerDefinition(profile.provider).aiOperations
+          )
+            throw new Error("该翻译配置不支持 AI 断句或指令改写");
         }
         if (args.kind !== "transcribe" && !p.document.cues.length)
           throw new Error("请先生成或导入字幕");
@@ -221,6 +363,14 @@ export class Service {
         if (args.kind === "render" && !p.media) throw new Error("请先导入视频");
         if (args.kind === "translate" && !params.targetLanguage?.trim())
           throw new Error("请选择目标语言");
+        if (args.kind === "rewrite" && !params.instruction?.trim())
+          throw new Error("请输入 AI 修改要求");
+        if (
+          args.kind === "rewrite" &&
+          params.scope === "translation" &&
+          !params.targetLanguage?.trim()
+        )
+          throw new Error("请选择要修改的译文语言");
         if (args.kind === "render")
           exportSubtitles(
             p.document,

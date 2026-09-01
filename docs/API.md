@@ -19,7 +19,7 @@
 | GET   | `/media/:projectId`                            | 视频读取，支持 Range                                            |
 | GET   | `/outputs/:jobId`                              | 下载已完成的 MP4                                                |
 
-RPC 操作：`state`、`catalog`、`media.fonts`、`project.blank`、`project.rename`、`profile.save`、`profile.delete`、`subtitle.import`、`subtitle.edit`、`subtitle.split`、`subtitle.merge`、`subtitle.replace`、`subtitle.export`、`style.save`、`job.create`、`job.cancel`、`job.retry`、`job.apply`、`library.list`、`library.import`。桌面/安卓提供等价网关，另有原生 `output.save`。
+RPC 操作：`state`、`catalog`、`media.fonts`、`project.blank`、`project.rename`、`profile.save`、`profile.test`、`profile.delete`、`subtitle.import`、`subtitle.edit`、`subtitle.split`、`subtitle.merge`、`subtitle.replace`、`subtitle.export`、`style.save`、`job.create`、`job.cancel`、`job.retry`、`job.apply`、`library.list`、`library.import`。桌面/安卓提供等价网关，另有原生 `output.save`。
 
 例如单独烧录：
 
@@ -40,6 +40,10 @@ RPC 操作：`state`、`catalog`、`media.fonts`、`project.blank`、`project.re
 ```
 
 `audioTrack` 是从 0 开始的音频轨道序号，不是容器的绝对流 ID。`mode` 为 `source`、`translation` 或 `bilingual`。`subtitle.export` 的 `args` 为 `{id,format,mode,language}`，返回字幕文本，不启动视频编码。
+
+`job.create.kind` 可为 `transcribe`、`translate`、`segment`、`rewrite` 或 `render`。`segment` 使用 `profileId/maxCharacters/maxDurationMs/minCharacters/instruction`；`rewrite` 使用 `profileId/scope/instruction`，修改译文时还要传 `targetLanguage`。模型只返回稳定 ID 和文字，服务端 / 原生层负责保留或计算时间轴。
+
+`profile.test` 的参数是 `{id}`。它会发起小型真实请求并返回 `{ok,message,checkedAt}`，同时更新配置的联调状态。需要远端音频 URL 的 ASR 会使用已经保存的兼容存储配置。这个操作可能产生少量厂商费用。
 
 ## 自定义 ASR：OpenAI 兼容
 

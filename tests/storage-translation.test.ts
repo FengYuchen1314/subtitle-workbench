@@ -87,6 +87,17 @@ for (const def of catalog.filter((p) => p.category === "translation"))
           return { access_token: "token", expires_in: 3600 } as any;
         assert.ok(request?.headers);
         const payload = request!.json as any;
+        if (def.id === "qwen-mt") {
+          assert.equal(payload.model, "fixture-model");
+          assert.equal(payload.translation_options.source_lang, "en");
+          assert.equal(payload.translation_options.target_lang, "zh");
+          const source = payload.messages[0].content;
+          return {
+            choices: [
+              { message: { content: source === "hello" ? "你好" : "世界" } },
+            ],
+          } as any;
+        }
         if (def.id === "llm-gemini")
           assert.deepEqual(
             payload.generationConfig.responseJsonSchema.required,
@@ -134,4 +145,60 @@ for (const def of catalog.filter((p) => p.category === "translation"))
       "glossary",
     );
     assert.deepEqual(output, { a: "你好", b: "世界" });
+  });
+
+for (const def of catalog.filter((p) => p.aiOperations))
+  test(`${def.id}: AI rewrite and segmentation preserve exact IDs`, async () => {
+    let call = 0;
+    const http: Transport = {
+      async request() {
+        call++;
+        const text =
+          call === 1
+            ? JSON.stringify({
+                translations: [
+                  { id: "a", text: "Hello." },
+                  { id: "b", text: "World." },
+                ],
+              })
+            : JSON.stringify({
+                segments: [
+                  { id: "a", parts: ["Hel", "lo"] },
+                  { id: "b", parts: ["World"] },
+                ],
+              });
+        return (
+          def.id === "llm-gemini"
+            ? { candidates: [{ content: { parts: [{ text }] } }] }
+            : def.id === "llm-claude"
+              ? { content: [{ type: "text", text }] }
+              : { choices: [{ message: { content: text } }] }
+        ) as any;
+      },
+    };
+    const provider = new CloudTranslation(profile(def.id), http);
+    assert.deepEqual(
+      await provider.rewrite(
+        [
+          { id: "a", text: "hello" },
+          { id: "b", text: "world" },
+        ],
+        "en",
+        "Fix punctuation",
+      ),
+      { a: "Hello.", b: "World." },
+    );
+    assert.deepEqual(
+      await provider.segment(
+        [
+          { id: "a", text: "Hello", durationMs: 2000 },
+          { id: "b", text: "World", durationMs: 2000 },
+        ],
+        "en",
+        4,
+        2000,
+        "",
+      ),
+      { a: ["Hel", "lo"], b: ["World"] },
+    );
   });
